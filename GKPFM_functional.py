@@ -35,15 +35,37 @@ This notebook will allow  fast KPFM by recovery of the electrostatic foce direct
 '''
 #%%Change the filepath below, used for storing images
 
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_500us_green700mA__0006'
-save_figure = True
-light_on_time = [1, 7]  # ms
+import os
 
-pre_load_files = False
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_700mA__0011'
+save_figure = True
+
+# to automatically set light_on times
+a = output_filepath.find('ms')
+b = output_filepath.find('us')
+if a != -1:
+    tm = int(output_filepath[a-1])
+    light_on_time = [1, 1+tm]  # ms   
+elif b != -1:
+    tm = int(output_filepath[b-3:b])
+    light_on_time = [1, 1+tm]  # ms
+del(a)
+del(b)
+
+# Avoid prompts when loading data
+pre_load_files = True
 
 if pre_load_files is True:
-    [tune_file, data_file] = [r'replace_with_tune_file_path',
-                              r'replace_with_data_file_path'  ]
+    output_filepath = os.path.expanduser(output_filepath)
+    idx = output_filepath.rfind("\\")
+    data_file = os.path.join(output_filepath, output_filepath[idx+1:] + '_bigtime_00.dat')
+    
+    tune_path = os.path.abspath(r'E:\ORNL\20191221_BAPI\BAPI22_TUNE__0009')
+    tune_path = os.path.expanduser(tune_path)
+    idx = tune_path.rfind("\\")
+    tune_file = os.path.join(tune_path, tune_path[idx+1:] + '_bigtime_00.dat')
+    
+    del(idx)
 
 #%% Installing required packages
 
