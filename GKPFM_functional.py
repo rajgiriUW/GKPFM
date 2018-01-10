@@ -37,7 +37,7 @@ This notebook will allow  fast KPFM by recovery of the electrostatic foce direct
 
 import os
 
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_700mA__0011'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_10mA__0014'
 save_figure = True
 
 # to automatically set light_on times
@@ -150,21 +150,26 @@ If you have previously translated this data you can change the data type in the 
 '''
 #%% Step 1A) Translate Tune file to HF5 format
 
+pre_load_files = False
 if pre_load_files is False:
-    input_file_path = px.io_utils.uiGetFile(caption='Select translated .h5 file or raw experiment data',
-                                            file_filter='Parameters for raw G-Line data (*.dat);; \
+    input_file_path = px.io_utils.uiGetFile(caption='Select translated .h5 file or tune data',
+                                            file_filter='Parameters for raw G-Line tune (*.dat);; \
                                             Translated file (*.h5)')
 
 tune_path, _ = os.path.split(input_file_path)
 tune_file_base_name=os.path.basename(tune_path)
 
+i =1
 if input_file_path.endswith('.dat'):
+    print(i)
     print('Translating raw data to h5. Please wait')
-    tran=px.GTuneTranslator()
-    h5_path=tran.translate(input_file_path)
+    tran = px.GTuneTranslator()
+    h5_path = tran.translate(input_file_path)
+    print(input_file_path)
+    
 else:
     h5_path = input_file_path
-
+    
 #%% Step 1B) Extract the Resonance Modes Considered in the Force Reconstruction
 
 #define number of eigenmodes to consider
@@ -771,7 +776,7 @@ def single_poly(h5_resh,pixel_ex_wfm, m, pnts_per_per, k4):
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,1,2]) ##Components you want to keep
+    clean_components = np.array([0,1,2, 3,4, 5]) ##Components you want to keep
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
@@ -865,9 +870,12 @@ CPD = -0.5*np.divide(wHfit3[:,:,1],wHfit3[:,:,2])
 
 #%% Store to H5
 
-dset = hdf.file.create_dataset("parafit_main", shape=wHfit3.shape, dtype=np.float32)
-dset[:,:] = wHfit3
-
+try:
+    dset = hdf.file.create_dataset("parafit_main", shape=wHfit3.shape, dtype=np.float32)
+    dset[:,:] = wHfit3
+except:
+    print('Issue with parafit save')
+    
 hdf.file.flush()
 
 #%% Fit function for CPD
@@ -924,9 +932,14 @@ for r in np.arange(CPD_on_avg.shape[0]):
 
 SPV = CPD_on_avg - CPD_off_avg
 
-np.savetxt(output_filepath+r'\CPD_on.txt', CPD_on_avg, delimiter=' ')
-np.savetxt(output_filepath+r'\CPD_off.txt', CPD_off_avg, delimiter=' ')
-np.savetxt(output_filepath+r'\SPV.txt', SPV, delimiter=' ')
+if PCA_post_reconstruction_clean == True:
+    np.savetxt(output_filepath+r'\CPD_on_PCApost.txt', CPD_on_avg, delimiter=' ')
+    np.savetxt(output_filepath+r'\CPD_off_PCApost.txt', CPD_off_avg, delimiter=' ')
+    np.savetxt(output_filepath+r'\SPV_PCApost.txt', SPV, delimiter=' ')
+else:
+    np.savetxt(output_filepath+r'\CPD_on_noPCApost.txt', CPD_on_avg, delimiter=' ')
+    np.savetxt(output_filepath+r'\CPD_off_noPCApost.txt', CPD_off_avg, delimiter=' ')
+    np.savetxt(output_filepath+r'\SPV_noPCApost.txt', SPV, delimiter=' ')
 
 # Save CPD to the H5 file
 grp_name = h5_main.name.split('/')[-1] + '-CPD'
@@ -938,6 +951,14 @@ grp_CPD.addChildren([ds_CPDon])
 grp_CPD.addChildren([ds_CPDoff])
 grp_CPD.attrs['pulse_time'] = [p_on, p_off]
 hdf.writeData(grp_CPD, print_log=True)
+
+# Crop noisy data
+lines_to_cut = np.arange(63, 55, -1)
+CPD_on_avg = np.delete(CPD_on_avg, lines_to_cut, axis=0 )
+CPD_off_avg = np.delete(CPD_off_avg, lines_to_cut, axis=0 )
+CPD_on_time = np.delete(CPD_on_time, lines_to_cut, axis=0 )
+CPD_off_time = np.delete(CPD_off_time, lines_to_cut, axis=0 )
+SPV = CPD_on_avg - CPD_off_avg
 
 #%%
 # Plotting
@@ -963,18 +984,22 @@ cbar.set_label('CPD (mV)', rotation=270, labelpad=16)
 #plt.tight_layout(pad=0.0, w_pad=0.0, h_pad=0.0)
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\PCA_CPDon_vs_off.eps', format='eps')
-    fig.savefig(output_filepath+'\PCA_CPDon_vs_off.tif', format='tiff')
+    if PCA_post_reconstruction_clean == True:
+        fig.savefig(output_filepath+'\CPDon_vs_off_noPCApost.eps', format='eps')
+        fig.savefig(output_filepath+'\CPDon_vs_off_noPCApost.tif', format='tiff')
+    else:
+        fig.savefig(output_filepath+'\CPDon_vs_off_noPCApost.eps', format='eps')
+        fig.savefig(output_filepath+'\CPDon_vs_off_noPCApost.tif', format='tiff')
     
 # Rate images
-mx = np.max([np.max(CPD_on_rate), np.max(CPD_off_rate)])*1e3
-mn = np.min([np.min(CPD_on_rate), np.min(CPD_off_rate)])*1e3
+mx = np.max([np.max(CPD_on_time), np.max(CPD_off_time)])*1e3
+mn = np.min([np.min(CPD_on_time), np.min(CPD_off_time)])*1e3
 
 # some clean-up for plotting to remove curve-fit errors
 from scipy import signal
 
-testC = signal.medfilt(CPD_on_rate, kernel_size=[3,3])
-testD = signal.medfilt(CPD_off_rate, kernel_size=[3,3])
+testC = signal.medfilt(CPD_on_time, kernel_size=[3,3])
+testD = signal.medfilt(CPD_off_time, kernel_size=[3,3])
 
 mnC = np.mean(testC) - 2*np.std(testC)
 mxC = np.mean(testC) + 2*np.std(testC)
@@ -988,20 +1013,20 @@ fig = plt.figure(figsize=(8,6))
 a = fig.add_subplot(211)
 a.set_axis_off()
 a.set_title('CPD Off Time', fontsize=12)
-a.imshow(CPD_off_rate, cmap='inferno', vmin=mn, vmax=mx)
+a.imshow(CPD_off_time, cmap='inferno', vmin=mn, vmax=mx)
 
 a = fig.add_subplot(212)
 a.set_axis_off()
 a.set_title('CPD On Time', fontsize=12)
-im = a.imshow(CPD_on_rate, cmap='inferno', vmin=mn, vmax=mx)
+im = a.imshow(CPD_on_time, cmap='inferno', vmin=mn, vmax=mx)
 
 cx = fig.add_axes([0.82, 0.11, 0.02, 0.77])
 cbar = fig.colorbar(im, cax=cx)
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\PCA_CPD_rates.eps', format='eps')
-    fig.savefig(output_filepath+'\PCA_CPD_rates.tif', format='tiff')
+    fig.savefig(output_filepath+'\CPD_times.eps', format='eps')
+    fig.savefig(output_filepath+'\CPD_times.tif', format='tiff')
 
 #%%
 # SPV plotting
@@ -1017,8 +1042,12 @@ cb = fig.colorbar(im)
 cb.set_label('SPV (mV)')
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\PCA_SPV.eps', format='eps')
-    fig.savefig(output_filepath+'\PCA_SPV.tif', format='tiff')
+    if PCA_post_reconstruction_clean == True:
+        fig.savefig(output_filepath+'\SPV_PCApost.eps', format='eps')
+        fig.savefig(output_filepath+'\SPV_PCApost.tif', format='tiff')
+    else:
+        fig.savefig(output_filepath+'\SPV_PCApost.eps', format='eps')
+        fig.savefig(output_filepath+'\SPV_PCApost.tif', format='tiff')
 
 #%% Slice of one CPD set
 test=CPD[100,:]
@@ -1062,8 +1091,8 @@ abun_maps = np.reshape(U[:,:25], (num_rows, num_cols,-1))
 fig, axes = px.plot_utils.plot_scree(S, title='Skree plot')
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\PCA_CPDon_Skree.eps', format='eps')
-    fig.savefig(output_filepath+'\PCA_CPDon_Skree.tif', format='tiff')
+    fig.savefig(output_filepath+'\CPDon_Skree.eps', format='eps')
+    fig.savefig(output_filepath+'\CPDon_Skree.tif', format='tiff')
 
 
 # Visualize the eigenvectors:
@@ -1075,16 +1104,16 @@ fig, axes =px.plot_utils.plot_loops(time_on*1E+3, first_evecs, x_label='Time (ms
                                     evenly_spaced=False)
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\PCA_CPDonEig.eps', format='eps')
-    fig.savefig(output_filepath+'\PCA_CPDon_Eig.tif', format='tiff')
+    fig.savefig(output_filepath+'\CPDonEig.eps', format='eps')
+    fig.savefig(output_filepath+'\CPDon_Eig.tif', format='tiff')
 
 # Visualize the abundance maps:
 fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, heading='SVD Abundance Maps',
                                         color_bar_mode='single', cmap='inferno')
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\PCA_CPDon_Loadings.eps', format='eps')
-    fig.savefig(output_filepath+'\PCA_CPDon_Loadings.tif', format='tiff')
+    fig.savefig(output_filepath+'\CPDon_Loadings.eps', format='eps')
+    fig.savefig(output_filepath+'\CPDon_Loadings.tif', format='tiff')
 
 ####### CPD_OFF CASE
 U, S, V = randomized_svd(CPD_off, 256, n_iter=3)
@@ -1096,8 +1125,8 @@ abun_maps = np.reshape(U[:,:25], (num_rows, num_cols,-1))
 fig, axes = px.plot_utils.plot_scree(S, title='Skree plot')
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\PCA_CPDoff_Skree.eps', format='eps')
-    fig.savefig(output_filepath+'\PCA_CPDoff_Skree.tif', format='tiff')
+    fig.savefig(output_filepath+'\CPDoff_Skree.eps', format='eps')
+    fig.savefig(output_filepath+'\CPDoff_Skree.tif', format='tiff')
 
 
 # Visualize the eigenvectors:
@@ -1108,16 +1137,16 @@ fig, axes =px.plot_utils.plot_loops(time_off*1E+3, first_evecs, x_label='Time (m
                                     subtitle_prefix='Component', title='SVD Eigenvectors (F3R)',
                                     evenly_spaced=False)
 if save_figure == True:
-    fig.savefig(output_filepath+'\PCA_CPDoff_Eig.eps', format='eps')
-    fig.savefig(output_filepath+'\PCA_CPDoff_Eig.tif', format='tiff')
+    fig.savefig(output_filepath+'\CPDoff_Eig.eps', format='eps')
+    fig.savefig(output_filepath+'\CPDoff_Eig.tif', format='tiff')
 
 # Visualize the abundance maps:
 fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, heading='SVD Abundance Maps',
                              color_bar_mode='single', cmap='inferno')
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\PCA_CPDoff_Loadings.eps', format='eps')
-    fig.savefig(output_filepath+'\PCA_CPDoff_Loadings.tif', format='tiff')
+    fig.savefig(output_filepath+'\CPDoff_Loadings.eps', format='eps')
+    fig.savefig(output_filepath+'\CPDoff_Loadings.tif', format='tiff')
     
 #%% Data Visualization
 
@@ -1140,8 +1169,8 @@ abun_maps = np.reshape(U[:,:25], (num_rows, num_cols,-1))
 fig, axes = px.plot_utils.plot_scree(S, title='Skree plot')
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\PCA_CPDtotal_Skree.eps', format='eps')
-    fig.savefig(output_filepath+'\PCA_CPDtotal_Skree.tif', format='tiff')
+    fig.savefig(output_filepath+'\CPDtotal_Skree.eps', format='eps')
+    fig.savefig(output_filepath+'\CPDtotal_Skree.tif', format='tiff')
 
 
 # Visualize the eigenvectors:
@@ -1151,15 +1180,15 @@ fig, axes =px.plot_utils.plot_loops(time*1E+3, first_evecs, x_label='Time (ms)',
                          subtitle_prefix='Component', title='SVD Eigenvectors (F3R)', evenly_spaced=False)
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\PCA_CPDtotal_Eig.eps', format='eps')
-    fig.savefig(output_filepath+'\PCA_CPDtotal_Eig.tif', format='tiff')
+    fig.savefig(output_filepath+'\CPDtotal_Eig.eps', format='eps')
+    fig.savefig(output_filepath+'\CPDtotal_Eig.tif', format='tiff')
 
 # Visualize the abundance maps:
 fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, heading='SVD Abundance Maps',
                              color_bar_mode='single', cmap='inferno')
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\PCA_CPDtotal_Loadings.eps', format='eps')
-    fig.savefig(output_filepath+'\PCA_CPDtotal_Loadings.tif', format='tiff')
+    fig.savefig(output_filepath+'\CPDtotal_Loadings.eps', format='eps')
+    fig.savefig(output_filepath+'\CPDtotal_Loadings.tif', format='tiff')
 
 
