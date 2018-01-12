@@ -37,7 +37,7 @@ This notebook will allow  fast KPFM by recovery of the electrostatic foce direct
 
 import os
 
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_10mA__0014'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_500us_green700mA__0006'
 save_figure = True
 
 # to automatically set light_on times
@@ -48,7 +48,7 @@ if a != -1:
     light_on_time = [1, 1+tm]  # ms   
 elif b != -1:
     tm = int(output_filepath[b-3:b])
-    light_on_time = [1, 1+tm]  # ms
+    light_on_time = [1, 1+tm/1000]  # ms
 del(a)
 del(b)
 
@@ -150,14 +150,15 @@ If you have previously translated this data you can change the data type in the 
 '''
 #%% Step 1A) Translate Tune file to HF5 format
 
-pre_load_files = False
 if pre_load_files is False:
     input_file_path = px.io_utils.uiGetFile(caption='Select translated .h5 file or tune data',
                                             file_filter='Parameters for raw G-Line tune (*.dat);; \
                                             Translated file (*.h5)')
 
-tune_path, _ = os.path.split(input_file_path)
-tune_file_base_name=os.path.basename(tune_path)
+    tune_path, _ = os.path.split(input_file_path)
+    tune_file_base_name=os.path.basename(tune_path)
+else:
+    input_file_path = tune_file
 
 i =1
 if input_file_path.endswith('.dat'):
@@ -356,7 +357,9 @@ if pre_load_files is False:
     input_file_path = px.io_utils.uiGetFile(caption='Select translated .h5 file or raw experiment data',
                                             file_filter='Parameters for raw G-Line data (*.dat);; \
                                             Translated file (*.h5)')
-
+else:
+    input_file_path = data_file
+    
 folder_path, _ = os.path.split(input_file_path)
 
 if input_file_path.endswith('.dat'):
@@ -776,7 +779,7 @@ def single_poly(h5_resh,pixel_ex_wfm, m, pnts_per_per, k4):
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,1,2, 3,4, 5]) ##Components you want to keep
+    clean_components = np.array([0,1,2]) ##Components you want to keep
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
