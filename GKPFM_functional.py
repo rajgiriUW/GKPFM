@@ -586,7 +586,7 @@ if save_figure == True:
 PCA_pre_reconstruction_clean = True
 
 if PCA_pre_reconstruction_clean == True:
-    clean_components = np.array([0, 1]) # np.append(range(5,9),(17,18))
+    clean_components = np.array([0, 1,2,3,4]) # np.append(range(5,9),(17,18))
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_resh, components=num_components)
@@ -862,7 +862,17 @@ for n in range((num_rows*num_cols)):
         wHfit3[n,k4,:] = p1
 
 # polyfit returns a + bx + cx^2 coefficients
-CPD = -0.5*np.divide(wHfit3[:,:,1],wHfit3[:,:,2])
+        
+# lets us debug further
+if PCA_post_reconstruction_clean:
+
+    CPD_PCA = -0.5*np.divide(wHfit3[:,:,1],wHfit3[:,:,2])
+    CPD = CPD_PCA
+    
+else:
+    
+    CPD_raw = -0.5*np.divide(wHfit3[:,:,1],wHfit3[:,:,2])
+    CPD = CPD_raw
 #CPD = -0.5*np.divide(wHfit3[:,:,1],wHfit3[:,:,0])
 
 # n_list = range(num_rows*num_cols)
@@ -898,8 +908,8 @@ time_per_slice = CPD.shape[0]
 time = np.linspace(0.0,pxl_time,num_periods)
 
 dtCPD = pxl_time/CPD.shape[1] #dt for the CPD since not same length as raw data
-p_on = int(light_on_time[0]*1e-3 / dtCPD)
-p_off = int(light_on_time[1]*1e-3 / dtCPD) - 1
+p_on = int(light_on_time[0]*1e-3 / dtCPD) + 1
+p_off = int(light_on_time[1]*1e-3 / dtCPD) + 1
 
 time_on = time[p_on:p_off]
 time_off = time[p_off:]
@@ -926,18 +936,20 @@ for r in np.arange(CPD_on_avg.shape[0]):
         small dt. So I fit and then multiply by the time_per_point (dtCPD)
         '''
         
-        cut = CPD_on[r*num_cols + c, :]
+        cut = CPD_on[r*num_cols + c, :] - CPD_on[r*num_cols + c, 0]
         try:
-            popt, _ = curve_fit(fitexp, np.arange(cut.shape[0]), cut )
+            bds = ([-1, (1e-6)/dtCPD, -1], [-1e-10, (1e-2)/dtCPD, 1])
+            popt, _ = curve_fit(fitexp, np.arange(cut.shape[0]), cut, bounds=bds)
             CPD_on_time[r][c] = popt[1]*dtCPD
         except:
             CPD_on_time[r][c] = CPD_on_time[r][c-1] # blur bad pixels
             print( 'error_on')
             print(r, ' ', c)
         
-        cut = CPD_off[r*num_cols + c, :]
+        cut = CPD_off[r*num_cols + c, :] - CPD_off[r*num_cols + c, 0]
         try:
-            popt, _ = curve_fit(fitexp, np.arange(cut.shape[0]), cut )
+            bds = ([1e-10, (1e-6)/dtCPD, -1], [1, (1e-2)/dtCPD, 1])
+            popt, _ = curve_fit(fitexp, np.arange(cut.shape[0]), cut, bounds=bds )
             CPD_off_time[r][c] = popt[1]*dtCPD
         except:
             CPD_off_time[r][c] = CPD_off_time[r][c-1] #blur bad pixels
@@ -1206,3 +1218,20 @@ if save_figure == True:
     fig.savefig(output_filepath+'\CPDtotal_Loadings.tif', format='tiff')
 
 
+#%% CPD Time Slices
+    
+timeslice = np.floor(np.arange(0.5, 8, .5) *1e-3/dtCPD)
+
+for k in timeslice:
+    fig = plt.figure(figsize=(10,8))
+    a = fig.add_subplot(111)
+    CPD_rs = np.reshape(CPD[:, int(k)], [64, 128])
+    im = a.imshow(CPD_rs, cmap='inferno', vmin=0.000, vmax=0.08)
+    a.set_axis_off()
+    tl = '{0:.2f}'.format(k*dtCPD/1e-3)
+    plt.title('At '+ tl + ' ms', fontsize=12)
+    cx = fig.add_axes([0.92, 0.31, 0.02, 0.37])
+    cbar = fig.colorbar(im, cax=cx)
+    cbar.set_label('CPD (mV)', rotation=270, labelpad=16)
+    #fig.savefig(output_filepath+'\CPDslice_' + tl + '_ms.eps', format='eps')
+    fig.savefig(output_filepath+'\CPDslice_' + tl + '_ms.tif', format='tiff')
