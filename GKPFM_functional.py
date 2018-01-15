@@ -37,7 +37,7 @@ This notebook will allow  fast KPFM by recovery of the electrostatic foce direct
 
 import os
 
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_500us_green700mA__0006'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_2ms_700mA__0006'
 save_figure = True
 
 # to automatically set light_on times
@@ -517,19 +517,20 @@ filter_parms = dict()
 # if noise_tolerance is not None:
 #     filter_parms['noise_threshold'] = noise_tolerance
 
-    #h5_filt_grp = px.hdf_utils.check_for_old(h5_main, 'FFT_Filtering', new_parms=filter_parms)
+h5_filt_grp = px.hdf_utils.check_for_old(h5_main, 'FFT_Filtering')#, new_parms=filter_parms)
 
-#if h5_filt_grp is None:
-sig_filt = px.processing.SignalFilter(h5_main, frequency_filters=freq_filts, 
-                                      noise_threshold=noise_tolerance,
-                                      write_filtered=True, write_condensed=False, 
-                                      num_pix=1,verbose=False)
-h5_filt_grp = sig_filt.compute()
-#else:
-#    print('Taking previously computed results')
+if h5_filt_grp == None:
+    
+    sig_filt = px.processing.SignalFilter(h5_main, frequency_filters=freq_filts, 
+                                          noise_threshold=noise_tolerance,
+                                          write_filtered=True, write_condensed=False, 
+                                          num_pix=1,verbose=True, cores=1)
+    h5_filt_grp = sig_filt.compute()
+    
+else:
+    print('Taking previously computed results')
 
 h5_filt = h5_filt_grp['Filtered_Data']
-
 
 #%% Reshapes the filtered response into a matrix
 
@@ -956,12 +957,12 @@ grp_CPD.attrs['pulse_time'] = [p_on, p_off]
 hdf.writeData(grp_CPD, print_log=True)
 
 # Crop noisy data
-lines_to_cut = np.arange(63, 55, -1)
-CPD_on_avg = np.delete(CPD_on_avg, lines_to_cut, axis=0 )
-CPD_off_avg = np.delete(CPD_off_avg, lines_to_cut, axis=0 )
-CPD_on_time = np.delete(CPD_on_time, lines_to_cut, axis=0 )
-CPD_off_time = np.delete(CPD_off_time, lines_to_cut, axis=0 )
-SPV = CPD_on_avg - CPD_off_avg
+#lines_to_cut = np.arange(63, 55, -1)
+#CPD_on_avg = np.delete(CPD_on_avg, lines_to_cut, axis=0 )
+#CPD_off_avg = np.delete(CPD_off_avg, lines_to_cut, axis=0 )
+#CPD_on_time = np.delete(CPD_on_time, lines_to_cut, axis=0 )
+#CPD_off_time = np.delete(CPD_off_time, lines_to_cut, axis=0 )
+#SPV = CPD_on_avg - CPD_off_avg
 
 #%%
 # Plotting
