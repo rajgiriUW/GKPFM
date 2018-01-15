@@ -37,7 +37,7 @@ This notebook will allow  fast KPFM by recovery of the electrostatic foce direct
 
 import os
 
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_4ms_700mA__0007'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_6ms_700mA__0008'
 save_figure = True
 
 # to automatically set light_on times
@@ -423,7 +423,7 @@ nbf = px.processing.fft.NoiseBandFilter(num_pts, samp_rate,
                                         [10E3, 1E3, 1E3, 1.5E3])
 
 freq_filts = [lpf, nbf]
-noise_tolerance = 5e-7
+noise_tolerance = 5e-5
 
 # Test filter on a single line:
 row_ind = 9
@@ -524,7 +524,7 @@ if h5_filt_grp == None:
     sig_filt = px.processing.SignalFilter(h5_main, frequency_filters=freq_filts, 
                                           noise_threshold=noise_tolerance,
                                           write_filtered=True, write_condensed=False, 
-                                          num_pix=1,verbose=True, cores=1)
+                                          num_pix=1,verbose=True, cores=2, max_mem_mb=512)
     h5_filt_grp = sig_filt.compute()
     
 else:
@@ -586,7 +586,7 @@ if save_figure == True:
 PCA_pre_reconstruction_clean = True
 
 if PCA_pre_reconstruction_clean == True:
-    clean_components = np.array([0, 1, 2]) # np.append(range(5,9),(17,18))
+    clean_components = np.array([0, 1]) # np.append(range(5,9),(17,18))
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_resh, components=num_components)
