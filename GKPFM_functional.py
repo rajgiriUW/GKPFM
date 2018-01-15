@@ -37,7 +37,7 @@ This notebook will allow  fast KPFM by recovery of the electrostatic foce direct
 
 import os
 
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_2ms_700mA__0006'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_4ms_700mA__0007'
 save_figure = True
 
 # to automatically set light_on times
@@ -352,7 +352,7 @@ hdf.close()
 #%% Step 2) Load, Translate and Denoize the G-KPFM data
 
 #Step 2A) Load and Translates image file to .H5 file format
-
+pre_load_files = False
 if pre_load_files is False:
     input_file_path = px.io_utils.uiGetFile(caption='Select translated .h5 file or raw experiment data',
                                             file_filter='Parameters for raw G-Line data (*.dat);; \
@@ -423,7 +423,7 @@ nbf = px.processing.fft.NoiseBandFilter(num_pts, samp_rate,
                                         [10E3, 1E3, 1E3, 1.5E3])
 
 freq_filts = [lpf, nbf]
-noise_tolerance = 5e-6
+noise_tolerance = 5e-7
 
 # Test filter on a single line:
 row_ind = 9
@@ -450,7 +450,7 @@ Adjust phase to close the parabola in the second set of images
 # Try Force Conversion on Filtered data
 
 # Phase Offset
-ph=-0.28    # phase from cable delays between excitation and response
+ph=-0.31    # phase from cable delays between excitation and response
 Noiselimit=40;
 
 # Try Force Conversion on Filtered data of single line (row_ind above)
@@ -586,7 +586,7 @@ if save_figure == True:
 PCA_pre_reconstruction_clean = True
 
 if PCA_pre_reconstruction_clean == True:
-    clean_components = np.array([0]) # np.append(range(5,9),(17,18))
+    clean_components = np.array([0, 1, 2]) # np.append(range(5,9),(17,18))
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_resh, components=num_components)
@@ -780,7 +780,7 @@ def single_poly(h5_resh,pixel_ex_wfm, m, pnts_per_per, k4):
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,1,2]) ##Components you want to keep
+    clean_components = np.array([0,1,2,3,4]) ##Components you want to keep
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
@@ -927,13 +927,23 @@ for r in np.arange(CPD_on_avg.shape[0]):
         '''
         
         cut = CPD_on[r*num_cols + c, :]
-        popt, _ = curve_fit(fitexp, np.arange(cut.shape[0]), cut )
-        CPD_on_time[r][c] = popt[1]*dtCPD
+        try:
+            popt, _ = curve_fit(fitexp, np.arange(cut.shape[0]), cut )
+            CPD_on_time[r][c] = popt[1]*dtCPD
+        except:
+            CPD_on_time[r][c] = CPD_on_time[r][c-1] # blur bad pixels
+            print( 'error_on')
+            print(r, ' ', c)
         
         cut = CPD_off[r*num_cols + c, :]
-        popt, _ = curve_fit(fitexp, np.arange(cut.shape[0]), cut )
-        CPD_off_time[r][c] = popt[1]*dtCPD
-
+        try:
+            popt, _ = curve_fit(fitexp, np.arange(cut.shape[0]), cut )
+            CPD_off_time[r][c] = popt[1]*dtCPD
+        except:
+            CPD_off_time[r][c] = CPD_off_time[r][c-1] #blur bad pixels
+            print( 'error')
+            print(r, ' ', c)
+            
 SPV = CPD_on_avg - CPD_off_avg
 
 if PCA_post_reconstruction_clean == True:
