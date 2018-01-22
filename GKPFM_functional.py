@@ -645,35 +645,28 @@ signal_ind_vec = np.arange(w_vec2.size)
 
 NoiseLimit = np.ceil(noise_floor)
 
-#for i in range(num_rows):
-for i in np.array([50]):
-    
-    print('Row = ', i)
-    row_ind = i
-    filt_line, fig_filt, axes_filt = px.processing.gmode_utils.test_filter(h5_main[row_ind],
-                                                                           frequency_filters=freq_filts,
-                                                                           noise_threshold=noise_tolerance,
-                                                                           show_plots=False)
+for i in range(num_rows):
+#for i in np.array([35,40,45, 50]):
+#    
+#    print('Row = ', i)
+#    row_ind = i
+#    filt_line, fig_filt, axes_filt = px.processing.gmode_utils.test_filter(h5_main[row_ind],
+#                                                                           frequency_filters=freq_filts,
+#                                                                           noise_threshold=noise_tolerance,
+#                                                                           show_plots=False)
 
     signal_ind_vec=np.arange(w_vec2.size)
     
     G = np.zeros(w_vec2.size,dtype=complex)         # G = raw
-    G_line = np.zeros(w_vec2.size,dtype=complex)         # G = raw
-    G_wPhase_line = np.zeros(w_vec2.size,dtype=complex)  # G_wphase = phase-shifted
+#    G_line = np.zeros(w_vec2.size,dtype=complex)         # G = raw
+#    G_wPhase_line = np.zeros(w_vec2.size,dtype=complex)  # G_wphase = phase-shifted
     
-    signal_ind_vec = np.arange(w_vec2.size)
-    ind_drive = (np.abs(w_vec2-ex_freq)).argmin()
-
-
     # Step 3B) Phase correction; ph value is defined way above in Step 2B.i
     
     if PCA_pre_reconstruction_clean == True:
         test_data = PCA_clean_data_prerecon[i,:] - np.mean(PCA_clean_data_prerecon[i,:])   
     else:
         test_data = h5_filt[i,:] - np.mean(h5_filt[i,:])
-  
-#    print('Test data: ', test_data)
-#    print('Filt Line: ', filt_line - np.mean(filt_line))
     
     # filt_line is from filtered data above  
     test_data = np.fft.fftshift(np.fft.fft(test_data))
@@ -685,38 +678,6 @@ for i in np.array([50]):
     G[signal_ind_vec] = test_data_ph[signal_ind_vec]
     G = G/TF_norm
     G_time[i,:] = np.real(np.fft.ifft(np.fft.ifftshift(G)))
-    G_time_debug_ph = G_time[i,:]
-    
-    G[signal_ind_vec] = test_data[signal_ind_vec]
-    G = G/TF_norm
-    G_time_debug = np.real(np.fft.ifft(np.fft.ifftshift(G)))
-    
-    ##
-    signal_ind_vec = np.arange(w_vec2.size)
-    ind_drive = (np.abs(w_vec2-ex_freq)).argmin()
-    
-    # filt_line is from filtered data above
-    test_line = filt_line-np.mean(filt_line)
-    test_line = np.fft.fftshift(np.fft.fft(test_line))
-    signal_kill = np.where(np.abs(test_line) < Noiselimit)
-    signal_ind_vec = np.delete(signal_ind_vec, signal_kill)
-    
-    # Original/raw data; TF_norm is from the Tune file transfer function
-    G_line[signal_ind_vec] = test_line[signal_ind_vec]
-    G_line = (G_line/TF_norm)
-    G_time_line = np.real(np.fft.ifft(np.fft.ifftshift(G_line))) #time-domain 
-    
-    # Phase-shifted data
-    test_shifted = (test_line)*np.exp(-1j*w_vec2/(w_vec2[ind_drive])*ph)
-    G_wPhase_line[signal_ind_vec] = test_shifted[signal_ind_vec]
-    G_wPhase_line = (G_wPhase_line/TF_norm)
-    G_wPhase_time_line = np.real(np.fft.ifft(np.fft.ifftshift(G_wPhase_line)))
-    ##  
-    print('G_wPhase_time_line: ', G_wPhase_time_line)
-    print('G_time phase shift: ', G_time_debug_ph)
-
-    print('G_time_line: ', G_time_line)
-    print('G_time: ', G_time_debug)
 
     FRaw_resp = np.fft.fftshift(np.fft.fft(h5_main[i]))
 
@@ -841,7 +802,7 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,1, 2, 3]) ##Components you want to keep
+    clean_components = np.array([0,1, 2, 3, 4, 5, 6]) ##Components you want to keep
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
@@ -856,7 +817,6 @@ periods = 4
  
 num_periods_per_sample = int(np.floor(num_periods / periods))
 pnts_per_sample = int(np.floor(pnts_per_period * periods))
-
 
 # new approach since it's base-2 samples and can curve-fit to less than full cycle
 decimation = 2**int(np.floor(np.log2(pnts_per_sample)))
@@ -923,7 +883,6 @@ for n in range((num_rows*num_cols)):
         else:
             resp = PCA_clean_data_postrecon[n][pnts_per_CPDpix*k4:
                                                pnts_per_CPDpix*(k4+1)]
-
                 
 #        resp = h5_F3rresh[n][pnts_per_CPDpix*k4:
 #                             pnts_per_CPDpix*(k4+1)]
@@ -1000,7 +959,14 @@ bds_on = ([-10, (1e-5), -5, time_on[0]-1e-10],
        [-1e-10, (1e-1), 5, time_on[0]+1e-10])
 p0on = [-0.025, 1e-3, 0, time_on[0]]
 
+bds_off = ([1e-10, (1e-5), -5, time_off[0]-1e-10], 
+           [10, (1e-1), 5, time_off[0]+1e-10])
+p0off = [.025, 1e-3, 0, time_off[0]]
+
 for r in np.arange(CPD_on_avg.shape[0]):
+
+    if r%10 == 0:
+        print('Row: ', r)
 
     for c in np.arange(CPD_on_avg.shape[1]):
         
@@ -1016,19 +982,16 @@ for r in np.arange(CPD_on_avg.shape[0]):
             print(r, ' ', c)
             break
 
-        bds_off = ([1e-10, (1e-5), -5, time_off[0]-1e-10], 
-                   [10, (1e-1), 5, time_off[0]+1e-10])
-        
-        CPD_off_avg[r][c] = np.mean(CPD_off[r*num_cols + c,:-1])
-#        cut = CPD_off[r*num_cols + c, :-1] - CPD_off[r*num_cols + c, 0]
-#        try:
-#            popt, _ = curve_fit(fitexp, time_off, cut, bounds=bds_off)
-#            CPD_off_time[r][c] = popt[1]
-#        except:
-#            CPD_off_time[r][c] = CPD_off_time[r][c-1] #blur bad pixels
-#            print( 'error')
-#            print(r, ' ', c)
-#            break
+        CPD_off_avg[r][c] = np.mean(CPD_off[r*num_cols + c,:])
+        cut = CPD_off[r*num_cols + c, :] - CPD_off[r*num_cols + c, 0]
+        try:
+            popt, _ = curve_fit(fitexp, time_off, cut, bounds=bds_off)
+            CPD_off_time[r][c] = popt[1]
+        except:
+            CPD_off_time[r][c] = CPD_off_time[r][c-1] #blur bad pixels
+            print( 'error')
+            print(r, ' ', c)
+            break
             
 SPV = CPD_on_avg - CPD_off_avg
 
@@ -1176,7 +1139,7 @@ plt.ylabel('CPD (V)', fontsize=16)
 plt.savefig(output_filepath+'\CPD_sample.tif', format='tiff')
 
 # random pixel
-r = 16
+r = 36
 c = 14
 bds = ([-10, (1e-5), -5, time_on[0]-1e-10], 
        [-1e-10, (1e-1), 5, time_on[0]+1e-10])
@@ -1337,8 +1300,8 @@ if save_figure == True:
     
 timeslice = np.floor(np.arange(0.5, 8, .5) *1e-3/dtCPD)
 
-mn = .09
-mx = 0.14
+mn = .004
+mx = 0.09
 for k in timeslice:
     fig = plt.figure(figsize=(10,8))
     a = fig.add_subplot(111)
