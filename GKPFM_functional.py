@@ -623,7 +623,9 @@ PCA_pre_reconstruction_clean = False
 if PCA_pre_reconstruction_clean == True:
     
     clean_components = np.array([0,1,2,3,4, 5, 6, 7,8]) # np.append(range(5,9),(17,18))
-    test = px.svd_utils.rebuild_svd(h5_resh, components=clean_components)
+    test = px.svd_utils.rebuild_svd(h5_resh, 
+                                    components=clean_components, 
+                                    max_RAM_mb=512)
     PCA_clean_data_prerecon = test[:,:].reshape(num_rows,-1)
 
 #%% Step 3) Fast Free Force Reconstruction
@@ -646,23 +648,12 @@ signal_ind_vec = np.arange(w_vec2.size)
 NoiseLimit = np.ceil(noise_floor)
 
 for i in range(num_rows):
-#for i in np.array([35,40,45, 50]):
-#    
-#    print('Row = ', i)
-#    row_ind = i
-#    filt_line, fig_filt, axes_filt = px.processing.gmode_utils.test_filter(h5_main[row_ind],
-#                                                                           frequency_filters=freq_filts,
-#                                                                           noise_threshold=noise_tolerance,
-#                                                                           show_plots=False)
 
     signal_ind_vec=np.arange(w_vec2.size)
     
     G = np.zeros(w_vec2.size,dtype=complex)         # G = raw
-#    G_line = np.zeros(w_vec2.size,dtype=complex)         # G = raw
-#    G_wPhase_line = np.zeros(w_vec2.size,dtype=complex)  # G_wphase = phase-shifted
     
     # Step 3B) Phase correction; ph value is defined way above in Step 2B.i
-    
     if PCA_pre_reconstruction_clean == True:
         test_data = PCA_clean_data_prerecon[i,:] - np.mean(PCA_clean_data_prerecon[i,:])   
     else:
@@ -806,7 +797,9 @@ if PCA_post_reconstruction_clean == True:
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
-    test = px.svd_utils.rebuild_svd(h5_F3rresh, components=clean_components)
+    test = px.svd_utils.rebuild_svd(h5_F3rresh, 
+                                    components=clean_components, 
+                                    max_RAM_mb=512)
     PCA_clean_data_postrecon = test[:,:].reshape(num_rows*num_cols,-1)
 
 #%% Test fitting on sample data
@@ -905,14 +898,20 @@ else:
     CPD_raw = -0.5*np.divide(wHfit3[:,:,1],wHfit3[:,:,2])
     CPD = CPD_raw
     
-#CPD = np.reshape(CPD, [64, 128, pnts_per_CPDpix])    
+# Save to HDF
+e = h5_main.parent.name + '/' + 'Raw_Data-CPD'
 
-grp_name = h5_main.name.split('/')[-1] + '-CPD'
-grp_CPD = px.MicroDataGroup(grp_name, h5_main.parent.name + '/')
-
-ds_CPDon = px.MicroDataset('CPD', data=CPD, parent = '/')
-grp_CPD.addChildren([ds_CPDon])
-hdf.writeData(grp_CPD, print_log=True)
+if e in hdf.file:
+    grp_name = hdf.file[e]
+    ds_CPD = grp_name['CPD']
+    ds_CPD = CPD[:,:]
+    
+else:    
+    grp_name = h5_main.name.split('/')[-1] + '-CPD'
+    grp_CPD = px.MicroDataGroup(grp_name, h5_main.parent.name + '/')
+    ds_CPD = px.MicroDataset('CPD', data=CPD, parent = '/')
+    grp_CPD.addChildren([ds_CPD])
+    hdf.writeData(grp_CPD, print_log=True)
 
 #%% Store to H5
 
@@ -920,7 +919,9 @@ try:
     dset = hdf.file.create_dataset("parafit_main", shape=wHfit3.shape, dtype=np.float32)
     dset[:,:] = wHfit3
 except:
-    print('Issue with parafit save')
+    print('Overwriting Parabola Fit Save')
+    dset = hdf.file['parafit_main']
+    dset[:,:] = wHfit3
     
 hdf.file.flush()
 
