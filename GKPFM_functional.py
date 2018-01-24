@@ -37,7 +37,7 @@ This notebook will allow  fast KPFM by recovery of the electrostatic foce direct
 
 import os
 
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_4ms_700mA__0007'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_2ms_700mA__0006'
 save_figure = True
 
 # to automatically set light_on times
@@ -60,7 +60,7 @@ if pre_load_files is True:
     idx = output_filepath.rfind("\\")
     data_file = os.path.join(output_filepath, output_filepath[idx+1:] + '_bigtime_00.dat')
     
-    tune_path = os.path.abspath(r'E:\ORNL\20191221_BAPI\BAPI20_TUNE__0009')
+    tune_path = os.path.abspath(r'E:\ORNL\20191221_BAPI\BAPI22_TUNE__0009')
     tune_path = os.path.expanduser(tune_path)
     idx = tune_path.rfind("\\")
     tune_file = os.path.join(tune_path, tune_path[idx+1:] + '_bigtime_00.dat')
@@ -178,10 +178,6 @@ num_bandsVal=2
 
 #define bands (center frequency +/- bandwith)
 center_freq = cantl_parms['Thermal_res']
-#MB0_w1 = 57E3 - 20E3
-#MB0_w2 = 57E3 + 20E3
-#MB1_w1 = 370E3 - 20E3
-#MB1_w2 = 370E3 + 20E3
 MB0_w1 = center_freq - 20E3
 MB0_w2 = center_freq + 20E3
 MB1_w1 = center_freq*6.25 - 20E3
@@ -241,22 +237,22 @@ plt.subplot(2,1,1)
 #plt.semilogy(np.abs(w_vec2[excited_bin_ind])*1E-6,
 #             np.abs(TF_vec[excited_bin_ind]))
 
-plt.semilogy(np.abs(w_vec2[excited_bin_ind])*1E-6,
+plt.semilogy(np.abs(w_vec2[excited_bin_ind])*1E-3,
              np.abs(TF_vec[excited_bin_ind]), 'r')
 #plt.semilogy(np.abs(w_vec2[excited_bin_ind])*1E-6,
 #             np.abs(Yt0_tune[excited_bin_ind]), 'b')
 #plt.semilogy(np.abs(w_vec2[excited_bin_ind])*1E-6,
 #             np.abs(F0[excited_bin_ind]), 'k')
-plt.xlabel('Frequency (MHz)')
+plt.xlabel('Frequency (kHz)')
 plt.ylabel('Amplitude (a.u.)')
-plt.xlim([band_edge_mat[0,0]*1e-6, band_edge_mat[0,1]*1e-6])
+plt.xlim([band_edge_mat[0,0]*1e-3, band_edge_mat[0,1]*1e-3])
 plt.tight_layout(pad=0.0, w_pad=0.0, h_pad=0.0)
 plt.subplot(2,1,2)
-plt.semilogy(np.abs(w_vec2[excited_bin_ind])*1E-6,
+plt.semilogy(np.abs(w_vec2[excited_bin_ind])*1E-3,
              np.angle(TF_vec[excited_bin_ind]))
-plt.xlabel('Frequency (MHz)')
+plt.xlabel('Frequency (kHz)')
 plt.ylabel('Phase (Rad)')
-plt.xlim([band_edge_mat[0,0]*1e-6, band_edge_mat[0,1]*1e-6])
+plt.xlim([band_edge_mat[0,0]*1e-3, band_edge_mat[0,1]*1e-3])
 #plt.tight_layout(pad=0.0, w_pad=0.0, h_pad=0.0)
 
 #%% Step 1C) Construct an effective Transfer function (TF_Norm) from SHO fits
@@ -366,12 +362,15 @@ if input_file_path.endswith('.dat'):
     print('Translating raw data to h5. Please wait')
     tran = px.GLineTranslator()
     h5_path = tran.translate(input_file_path)
+    hdf = px.ioHDF5(h5_path)
+    preLoaded = False
 else:
     h5_path = input_file_path
-
+    hdf = px.ioHDF5(h5_path)
+    px.hdf_utils.print_tree(hdf.file)
+    preLoaded = True #for pre-loading some data
+    
 #%% Step 2A.i) Extract some relevant parameters
-
-hdf = px.ioHDF5(h5_path)
 
 # Getting ancillary information and other parameters
 h5_main = px.hdf_utils.getDataSet(hdf.file,'Raw_Data')[0]
@@ -411,6 +410,58 @@ w_vec_pix = 1E-3*np.linspace(-0.5*samp_rate, 0.5*samp_rate - samp_rate/pnts_per_
 t_vec_line = 1E3*np.linspace(0, num_pts/samp_rate, num_pts)
 t_vec_pix = 1E3*np.linspace(0, pnts_per_pix/samp_rate, pnts_per_pix)
 
+#%% Load previous data
+
+if preLoaded == True:
+    ''' 
+    Loads all the previous missing data so we can skip around to relevant functions
+    '''
+
+    # Group addresses, assume only first members are important
+    nm_base = '/Measurement_000/Channel_000'
+    nm_filt_resh = 'Filtered_Data-Reshape_000'
+    nm_h5_resh = 'h5_F3R-Reshape_000'
+    nm_SVD = 'Reshaped_Data-SVD_000'
+    nm_CPD = nm_base + '/Raw_Data-CPD'
+    
+    grp = hdf.file['/Measurement_000/Channel_000']
+    h5_filt = px.hdf_utils.getDataSet(grp, 'Filtered_Data')[0]
+    h5_resh = px.hdf_utils.getDataSet(hdf.file['/'.join([h5_filt.parent.name, nm_filt_resh])],
+                                      'Reshaped_Data')[0]
+    h5_resh_grp = h5_resh.parent
+
+    # Filtered Data    
+    PCA_clean_data_prerecon = px.hdf_utils.getDataSet(hdf.file['/'.join([h5_resh_grp.name, nm_SVD])],
+                                                  'Rebuilt_Data')
+    if PCA_clean_data_prerecon == []:
+        PCA_pre_reconstruction_clean = False
+    else:
+        PCA_pre_reconstruction_clean = True
+        PCA_clean_data_prerecon = PCA_clean_data_prerecon[0]
+        h5_svd_group = PCA_clean_data_prerecon.parent.parent
+
+    h5_U = h5_svd_group['U']
+    h5_V = h5_svd_group['V']
+    h5_S = h5_svd_group['S']
+    
+    # Post-F3R
+    h5_F3R = px.hdf_utils.getDataSet(grp, 'h5_F3R')[0]
+    h5_F3rresh_grp = h5_F3R.parent
+    h5_F3rresh = px.hdf_utils.getDataSet(hdf.file['/'.join([h5_F3R.parent.name, nm_h5_resh])], 
+                                                  'Reshaped_Data')[0]
+    PCA_clean_data_postrecon = px.hdf_utils.getDataSet(hdf.file['/'.join([h5_F3rresh.parent.name, nm_SVD])],
+                                                  'Rebuilt_Data')
+    if PCA_clean_data_postrecon == []:
+        PCA_post_reconstruction_clean = False
+    else:
+        PCA_post_reconstruction_clean = True
+        PCA_clean_data_postrecon = PCA_clean_data_postrecon[0]
+    
+    # CPD
+    CPD = px.hdf_utils.getDataSet(grp, 'CPD')[0]
+    CPD_on_time = px.hdf_utils.getDataSet(grp, 'CPD_on_time')[0]
+    CPD_off_time = px.hdf_utils.getDataSet(grp, 'CPD_off_time')[0]
+    
 #%% Step 2B) Fourier Filter data
 '''
 Define filter parameters in first cell
@@ -430,13 +481,13 @@ nbf = px.processing.fft.NoiseBandFilter(num_pts, samp_rate,
                                         [5E3, 50E3, 100E3, 150E3, 200E3],
                                         [10E3, 1E3, 1E3, 1E3, 1E3])
 
- #no DC filtering
+#no DC filtering
 #nbf = px.processing.fft.NoiseBandFilter(num_pts, samp_rate, 
 #                                        [50E3, 100E3, 125E3],
 #                                        [1E3, 1E3, 1.5E3])
 
 freq_filts = [lpf, nbf]
-noise_tolerance = .000005
+noise_tolerance = 5e-7
 
 # Test filter on a single line:
 row_ind = 40
@@ -444,11 +495,6 @@ filt_line, fig_filt, axes_filt = px.processing.gmode_utils.test_filter(h5_main[r
                                                                        frequency_filters=freq_filts,
                                                                        noise_threshold=noise_tolerance,
                                                                        show_plots=True)
-
-#filt_line, fig_filt, axes_filt = px.processing.gmode_utils.test_filter(h5_filt[row_ind],
-#                                                                       frequency_filters=freq_filts,
-#                                                                       noise_threshold=noise_tolerance,
-#                                                                       show_plots=True)
 
 if save_figure == True:
     fig = fig_filt
@@ -624,8 +670,7 @@ if PCA_pre_reconstruction_clean == True:
     
     clean_components = np.array([0,1,2,3,4, 5, 6, 7,8]) # np.append(range(5,9),(17,18))
     test = px.svd_utils.rebuild_svd(h5_resh, 
-                                    components=clean_components, 
-                                    max_RAM_mb=512)
+                                    components=clean_components)
     PCA_clean_data_prerecon = test[:,:].reshape(num_rows,-1)
 
 #%% Step 3) Fast Free Force Reconstruction
@@ -724,16 +769,16 @@ px.hdf_utils.link_as_main(h5_main=h5_F3R, h5_pos_inds=h5_pos_inds,
                           h5_pos_vals=h5_pos_vals, h5_spec_inds=h5_spec_inds,
                           h5_spec_vals=h5_spec_vals, anc_dsets=[])
 
-h5_F3rresh_grp = px.hdf_utils.findH5group(h5_F3R, 'Reshape')
+h5_F3Rresh_grp = px.hdf_utils.findH5group(h5_F3R, 'Reshape')
 
 scan_width = 1
-h5_F3rresh = px.processing.gmode_utils.reshape_from_lines_to_pixels(h5_F3R, pixel_ex_wfm.size, scan_width / num_cols)
-h5_F3rresh_grp = h5_F3rresh.parent
+h5_F3Rresh = px.processing.gmode_utils.reshape_from_lines_to_pixels(h5_F3R, pixel_ex_wfm.size, scan_width / num_cols)
+h5_F3Rresh_grp = h5_F3Rresh.parent
 
 print('Data was reshaped from shape', h5_F3R.shape,
       'reshaped to ', h5_F3rresh.shape)
 
-raw = np.reshape(h5_F3rresh, [-1, pixel_ex_wfm.size])
+raw = np.reshape(h5_F3Rresh, [-1, pixel_ex_wfm.size])
 fig, axes = px.plot_utils.plot_loops(pixel_ex_wfm, raw[128:256],use_rainbow_plots=True, 
                                      x_label='Voltage (Vac)', title='Raw',
                                      plots_on_side=2, y_label='Deflection (a.u.)')
@@ -741,18 +786,18 @@ fig, axes = px.plot_utils.plot_loops(pixel_ex_wfm, raw[128:256],use_rainbow_plot
 #%% Do PCA on F3R recovered data
 
 # SVD and save results
-h5_svd = px.processing.svd_utils.SVD(h5_F3rresh, num_components=256)
+h5_svd = px.processing.svd_utils.SVD(h5_F3Rresh, num_components=256)
 h5_svd_group = h5_svd.compute()
 
-h5_u = h5_svd_group['U']
-h5_v = h5_svd_group['V']
-h5_s = h5_svd_group['S']
+h5_U = h5_svd_group['U']
+h5_V = h5_svd_group['V']
+h5_S = h5_svd_group['S']
 
 # Since the two spatial dimensions (x, y) have been collapsed to one, we need to reshape the abundance maps:
-abun_maps = np.reshape(h5_u[:,:25], (num_rows, num_cols,-1))
+abun_maps = np.reshape(h5_U[:,:25], (num_rows, num_cols,-1))
 
 #%% Visualize the variance / statistical importance of each component:
-fig, axes =px.plot_utils.plot_scree(h5_s, title='Skree plot')
+fig, axes =px.plot_utils.plot_scree(h5_S, title='Skree plot')
 
 if save_figure == True:
     if PCA_pre_reconstruction_clean == False:
@@ -764,7 +809,7 @@ if save_figure == True:
 
 
 # Visualize the eigenvectors:
-first_evecs = h5_v[:9, :]
+first_evecs = h5_V[:9, :]
 
 fig, axes =px.plot_utils.plot_loops(pixel_ex_wfm, first_evecs, x_label='Voltage (Vac)', use_rainbow_plots=True, y_label='Displacement (a.u.)', plots_on_side=3,
                          subtitle_prefix='Component', title='SVD Eigenvectors (F3R)', evenly_spaced=False)
@@ -793,13 +838,12 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,1, 2, 3, 4, 5, 6]) ##Components you want to keep
+    clean_components = np.array([0, 3, 4]) ##Components you want to keep
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
-    test = px.svd_utils.rebuild_svd(h5_F3rresh, 
-                                    components=clean_components, 
-                                    max_RAM_mb=512)
+    test = px.svd_utils.rebuild_svd(h5_F3Rresh, 
+                                    components=clean_components)
     PCA_clean_data_postrecon = test[:,:].reshape(num_rows*num_cols,-1)
 
 #%% Test fitting on sample data
@@ -827,7 +871,7 @@ k4 = 3 #random oscillation in that pixel
 # Use PCA clean or not
 if PCA_post_reconstruction_clean == False:
     print('Not post-filtered')
-    resp = h5_F3rresh[m][pnts_per_CPDpix*k4:pnts_per_CPDpix*(k4+1)]
+    resp = h5_F3Rresh[m][pnts_per_CPDpix*k4:pnts_per_CPDpix*(k4+1)]
 else:
     resp = PCA_clean_data_postrecon[m][pnts_per_CPDpix*k4:pnts_per_CPDpix*(k4+1)]
 
@@ -871,7 +915,7 @@ for n in range((num_rows*num_cols)):
     for k4 in range(pnts_per_CPDpix): #osc_period
 
         if PCA_post_reconstruction_clean == False:
-            resp = h5_F3rresh[n][pnts_per_CPDpix*k4:
+            resp = h5_F3Rresh[n][pnts_per_CPDpix*k4:
                                  pnts_per_CPDpix*(k4+1)]
         else:
             resp = PCA_clean_data_postrecon[n][pnts_per_CPDpix*k4:
@@ -884,7 +928,7 @@ for n in range((num_rows*num_cols)):
                                  pnts_per_CPDpix*(k4+1)]
         p1, _ = npPoly.polyfit(V_per_osc, resp, deg, full=True)
         wHfit3[n,k4,:] = p1
-
+    
 # polyfit returns a + bx + cx^2 coefficients
         
 # lets us debug further
@@ -902,11 +946,13 @@ else:
 e = h5_main.parent.name + '/' + 'Raw_Data-CPD'
 
 if e in hdf.file:
+    print('Overwriting CPD dataset')
     grp_name = hdf.file[e]
     ds_CPD = grp_name['CPD']
     ds_CPD = CPD[:,:]
     
 else:    
+    print('Creating new dataset')
     grp_name = h5_main.name.split('/')[-1] + '-CPD'
     grp_CPD = px.MicroDataGroup(grp_name, h5_main.parent.name + '/')
     ds_CPD = px.MicroDataset('CPD', data=CPD, parent = '/')
@@ -921,7 +967,7 @@ try:
 except:
     print('Overwriting Parabola Fit Save')
     dset = hdf.file['parafit_main']
-    dset[:,:] = wHfit3
+    dset = wHfit3
     
 hdf.file.flush()
 
@@ -964,6 +1010,7 @@ bds_off = ([1e-10, (1e-5), -5, time_off[0]-1e-10],
            [10, (1e-1), 5, time_off[0]+1e-10])
 p0off = [.025, 1e-3, 0, time_off[0]]
 
+#%% Generate CPD
 for r in np.arange(CPD_on_avg.shape[0]):
 
     if r%10 == 0:
@@ -1106,9 +1153,38 @@ cbar = fig.colorbar(im, cax=cx)
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\CPD_times.eps', format='eps')
-    fig.savefig(output_filepath+'\CPD_times.tif', format='tiff')
+    if PCA_post_reconstruction_clean == True:
+        fig.savefig(output_filepath+'\CPD_times_noPCA.tif', format='tiff')
+    else:
+        fig.savefig(output_filepath+'\CPD_times_PCA.tif', format='tiff')
 
+fig = plt.figure(figsize=(8,3))
+a = fig.add_subplot(111)
+a.set_axis_off()
+a.set_title('CPD Off Time', fontsize=12)
+a.imshow(CPD_off_time, cmap='inferno')
+cx = fig.add_axes([0.81, 0.11, 0.02, 0.77])
+cbar = fig.colorbar(im, cax=cx)
+cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
+if save_figure == True:
+    if PCA_post_reconstruction_clean == True:
+        fig.savefig(output_filepath+'\CPD_times_noPCA-Alone.tif', format='tiff')
+    else:
+        fig.savefig(output_filepath+'\CPD_times_PCA-Alone.tif', format='tiff')        
+        
+fig = plt.figure(figsize=(8,3))
+a = fig.add_subplot(111)
+a.set_axis_off()
+a.set_title('CPD On Time', fontsize=12)
+a.imshow(CPD_on_time, cmap='inferno')
+cx = fig.add_axes([0.81, 0.11, 0.02, 0.77])
+cbar = fig.colorbar(im, cax=cx)
+cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
+if save_figure == True:
+    if PCA_post_reconstruction_clean == True:
+        fig.savefig(output_filepath+'\CPD_times_noPCA-Alone.tif', format='tiff')
+    else:
+        fig.savefig(output_filepath+'\CPD_times_PCA-Alone.tif', format='tiff')    
 #%%
 # SPV plotting
 
@@ -1170,7 +1246,7 @@ plt.savefig(output_filepath+'\CPD_off_fitting_example.tif', format='tiff')
 
 indices = {106:47,
            76:49,
-           75:48,
+           75:38,
            50:29,
            13:48
           }
@@ -1301,7 +1377,7 @@ if save_figure == True:
     
 timeslice = np.floor(np.arange(0.5, 8, .5) *1e-3/dtCPD)
 
-mn = .004
+mn = -.031
 mx = 0.09
 for k in timeslice:
     fig = plt.figure(figsize=(10,8))
@@ -1316,20 +1392,30 @@ for k in timeslice:
     cbar.set_label('CPD (mV)', rotation=270, labelpad=16)
     #fig.savefig(output_filepath+'\CPDslice_' + tl + '_ms.eps', format='eps')
     fig.savefig(output_filepath+'\CPDslice_' + tl + '_ms.tif', format='tiff')
+
+#%%Animate and save
+
+import matplotlib.animation as animation
+time = np.linspace(0.0, pxl_time, CPD.shape[1])
     
-##%% Parabolic Fitting of Cleaned Data
-#def single_poly(h5_resh,pixel_ex_wfm, m, pnts_per_per, k4):
-#
-#    resp=h5_resh[m][pnts_per_per*k4:pnts_per_per*(k4+1)]
-#
-#    resp=resp-np.mean(resp)
-#
-#    V_per_osc=pixel_ex_wfm[pnts_per_per*k4:pnts_per_per*(k4+1)]
-#    p1,s=npPoly.polyfit(V_per_osc,resp,deg,full=True)
-#    y1=npPoly.polyval(V_per_osc,p1)
-#
-#    print('pixel: ' + str(m) + 'period: ' + str(k4))
-#
-#    return y1
-#%% 
+fig = plt.figure(figsize=(10,8))
+
+ims = []
+for k in np.arange(time.shape[0]):
+    a = fig.add_subplot(111)
+    CPD_rs = np.reshape(CPD[:, int(k)], [64, 128])
+    im = a.imshow(CPD_rs, cmap='inferno', vmin=mn, vmax=mx, animated=True)
+    a.set_axis_off()
+    htitle = 'At '+ '{0:.2f}'.format(k*dtCPD/1e-3)+ ' ms'
+    tl = a.text(55,-5, htitle)
+    ims.append([im, tl])
+
+    #plt.title(, fontsize=12)
+    
+ani = animation.ArtistAnimation(fig, ims, interval=150, blit=False,
+                                repeat_delay=10)
+#ani = animation.FuncAnimation(fig, update, frames=1, interval=150, blit=False,
+#                                repeat_delay=1000)
+ani.save(output_filepath + '\CPD.htm', codec='ffmpeg')
+    #%% 
 hdf.close()
