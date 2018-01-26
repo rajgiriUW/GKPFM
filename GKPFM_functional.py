@@ -37,7 +37,7 @@ This notebook will allow  fast KPFM by recovery of the electrostatic foce direct
 
 import os
 
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_2ms_700mA__0006'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_500us_700mA__0009'
 save_figure = True
 
 # to automatically set light_on times
@@ -439,17 +439,16 @@ if preLoaded == True:
         PCA_pre_reconstruction_clean = True
         PCA_clean_data_prerecon = PCA_clean_data_prerecon[0]
         h5_svd_group = PCA_clean_data_prerecon.parent.parent
-
-    h5_U = h5_svd_group['U']
-    h5_V = h5_svd_group['V']
-    h5_S = h5_svd_group['S']
+        h5_U = h5_svd_group['U']
+        h5_V = h5_svd_group['V']
+        h5_S = h5_svd_group['S']
     
     # Post-F3R
     h5_F3R = px.hdf_utils.getDataSet(grp, 'h5_F3R')[0]
-    h5_F3rresh_grp = h5_F3R.parent
-    h5_F3rresh = px.hdf_utils.getDataSet(hdf.file['/'.join([h5_F3R.parent.name, nm_h5_resh])], 
+    h5_F3Rresh_grp = h5_F3R.parent
+    h5_F3Rresh = px.hdf_utils.getDataSet(hdf.file['/'.join([h5_F3R.parent.name, nm_h5_resh])], 
                                                   'Reshaped_Data')[0]
-    PCA_clean_data_postrecon = px.hdf_utils.getDataSet(hdf.file['/'.join([h5_F3rresh.parent.name, nm_SVD])],
+    PCA_clean_data_postrecon = px.hdf_utils.getDataSet(hdf.file['/'.join([h5_F3Rresh.parent.name, nm_SVD])],
                                                   'Rebuilt_Data')
     if PCA_clean_data_postrecon == []:
         PCA_post_reconstruction_clean = False
@@ -487,7 +486,7 @@ nbf = px.processing.fft.NoiseBandFilter(num_pts, samp_rate,
 #                                        [1E3, 1E3, 1.5E3])
 
 freq_filts = [lpf, nbf]
-noise_tolerance = 5e-7
+noise_tolerance = 1e-7
 
 # Test filter on a single line:
 row_ind = 40
@@ -518,7 +517,7 @@ This segment does two things:
 # Try Force Conversion on Filtered data
 
 # Phase Offset
-ph = -0.30    # phase from cable delays between excitation and response
+ph = -0.30 + np.pi   # phase from cable delays between excitation and response
 
 # Calculates NoiseLimit
 fft_h5row = np.fft.fftshift(np.fft.fft(h5_main[row_ind]))
@@ -776,7 +775,7 @@ h5_F3Rresh = px.processing.gmode_utils.reshape_from_lines_to_pixels(h5_F3R, pixe
 h5_F3Rresh_grp = h5_F3Rresh.parent
 
 print('Data was reshaped from shape', h5_F3R.shape,
-      'reshaped to ', h5_F3rresh.shape)
+      'reshaped to ', h5_F3Rresh.shape)
 
 raw = np.reshape(h5_F3Rresh, [-1, pixel_ex_wfm.size])
 fig, axes = px.plot_utils.plot_loops(pixel_ex_wfm, raw[128:256],use_rainbow_plots=True, 
@@ -838,7 +837,7 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0, 3, 4]) ##Components you want to keep
+    clean_components = np.array([0, 1, 5,  6]) ##Components you want to keep
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
@@ -850,19 +849,19 @@ if PCA_post_reconstruction_clean == True:
 
 # This is number of periods you want to average over,
 # for best time resolution =1 (but takes longer to fit)
-periods = 4
+periods = 2
  
 num_periods_per_sample = int(np.floor(num_periods / periods))
 pnts_per_sample = int(np.floor(pnts_per_period * periods))
 
 # new approach since it's base-2 samples and can curve-fit to less than full cycle
-decimation = 2**int(np.floor(np.log2(pnts_per_sample)))
+decimation = 2**int(np.ceil(np.log2(pnts_per_sample)))
 pnts_per_CPDpix = int(N_points_per_pixel/decimation)
 tx = np.linspace(0, pxl_time, pnts_per_CPDpix) # time-axis
 
 deg = 2
-m = 2   #random sample pixel
-k4 = 3 #random oscillation in that pixel
+row = 2   #random sample pixel
+p = 3 #random oscillation in that pixel
 # note k4 cannot exceed Npoints_per_pixel/periods, obviously
 
 ##Raw F3R response
@@ -871,13 +870,13 @@ k4 = 3 #random oscillation in that pixel
 # Use PCA clean or not
 if PCA_post_reconstruction_clean == False:
     print('Not post-filtered')
-    resp = h5_F3Rresh[m][pnts_per_CPDpix*k4:pnts_per_CPDpix*(k4+1)]
+    resp = h5_F3Rresh[row][pnts_per_CPDpix*p:pnts_per_CPDpix*(p+1)]
 else:
-    resp = PCA_clean_data_postrecon[m][pnts_per_CPDpix*k4:pnts_per_CPDpix*(k4+1)]
+    resp = PCA_clean_data_postrecon[row][pnts_per_CPDpix*p:pnts_per_CPDpix*(p+1)]
 
 resp=resp-np.mean(resp)
 print(resp.shape)
-V_per_osc=pixel_ex_wfm[pnts_per_CPDpix*k4:pnts_per_CPDpix*(k4+1)]
+V_per_osc=pixel_ex_wfm[pnts_per_CPDpix*p:pnts_per_CPDpix*(p+1)]
 
 p1,s = npPoly.polyfit(V_per_osc,resp,deg,full=True)
 y1 = npPoly.polyval(V_per_osc,p1)
@@ -887,6 +886,29 @@ plt.figure()
 plt.plot(V_per_osc,resp, 'k')
 plt.plot(V_per_osc,y1, 'g')
 
+test_wH = np.zeros((pnts_per_CPDpix, deg+1))
+test_CPD = np.zeros(pnts_per_CPDpix)
+for p in range(pnts_per_CPDpix): #osc_period
+
+    if PCA_post_reconstruction_clean == False:
+        resp = h5_F3Rresh[row][pnts_per_CPDpix*p:
+                             pnts_per_CPDpix*(p+1)]
+    else:
+        resp = PCA_clean_data_postrecon[row][pnts_per_CPDpix*p:
+                                           pnts_per_CPDpix*(p+1)]
+            
+#        resp = h5_F3rresh[n][pnts_per_CPDpix*k4:
+#                             pnts_per_CPDpix*(k4+1)]
+    resp = (resp-np.mean(resp))
+    # -1 here is because somehow excitation is flipped compared to MATLAB 
+    V_per_osc = pixel_ex_wfm[pnts_per_CPDpix*p:
+                             pnts_per_CPDpix*(p+1)]
+    popt, _ = npPoly.polyfit(V_per_osc, resp, deg, full=True)
+    test_wH[p] = popt
+    
+test_CPD = -0.5 * test_wH[:,1]/test_wH[:,2]
+plt.figure()
+plt.plot(np.linspace(0,pxl_time,pnts_per_CPDpix), test_CPD)
 #%% Repeat on the full dataset
 
 # This is number of periods you want to average over,
@@ -899,7 +921,7 @@ pnts_per_sample = int(np.floor(pnts_per_period * periods))
 pnts_per_CPDpix = pnts_per_sample
 
 # new approach since it's base-2 samples and can curve-fit to less than full cycle
-decimation = 2**int(np.floor(np.log2(pnts_per_sample)))
+decimation = 2**int(np.ceil(np.log2(pnts_per_sample)))
 pnts_per_CPDpix = int(N_points_per_pixel/decimation)
 
 tx = np.linspace(0, pxl_time, pnts_per_CPDpix) # time-axis
@@ -931,15 +953,18 @@ for n in range((num_rows*num_cols)):
     
 # polyfit returns a + bx + cx^2 coefficients
         
-# lets us debug further
+# lets us debug further; cap is just capacitance (curvature), CPD is from peak of 
+#   parabola
 if PCA_post_reconstruction_clean == True:
 
     CPD_PCA = -0.5*np.divide(wHfit3[:,:,1],wHfit3[:,:,2]) # vertex of parabola
+    CPD_PCA_cap = wHfit3[:,:,2]
     CPD = CPD_PCA
     
 else:
     
     CPD_raw = -0.5*np.divide(wHfit3[:,:,1],wHfit3[:,:,2])
+    CPD_raw_cap = wHfit3[:,:,2]
     CPD = CPD_raw
     
 # Save to HDF
@@ -1003,10 +1028,10 @@ CPD_on_time = np.zeros((num_rows, num_cols))
 CPD_off_time = np.zeros((num_rows, num_cols))
 
 bds_on = ([-10, (1e-5), -5, time_on[0]-1e-10], 
-       [-1e-10, (1e-1), 5, time_on[0]+1e-10])
+       [10, (1e-1), 5, time_on[0]+1e-10])
 p0on = [-0.025, 1e-3, 0, time_on[0]]
 
-bds_off = ([1e-10, (1e-5), -5, time_off[0]-1e-10], 
+bds_off = ([-10, (1e-5), -5, time_off[0]-1e-10], 
            [10, (1e-1), 5, time_off[0]+1e-10])
 p0off = [.025, 1e-3, 0, time_off[0]]
 
@@ -1063,20 +1088,24 @@ grp_CPD = px.MicroDataGroup(grp_name, h5_main.parent.name + '/')
 try: 
     CPD_exists = h5_main.parent.name + '/' + grp_CPD.name + '/' + 'CPD_on_time'
     CPD_on_exists = hdf.file[CPD_exists]   # does this file exist already?
-    
     CPD_on_exists = CPD_on_time
-    CPD_exists = h5_main.parent.name + '/' + grp_CPD.name + '/' + 'CPD_off_time'
     
+    CPD_exists = h5_main.parent.name + '/' + grp_CPD.name + '/' + 'CPD_off_time'
     CPD_off_exists = hdf.file[CPD_exists]   
     CPD_off_exists = CPD_off_time
+    
+    SPV_exists = h5_main.parent.name + '/' + grp_CPD.name + '/' + 'SPV'
+    SPV_exists = SPV
     
     print('Overwriting CPD Data!')
 except:
     print('Creating new Datasets')
     ds_CPDon = px.MicroDataset('CPD_on_time', data=CPD_on_time, parent = '/')
     ds_CPDoff = px.MicroDataset('CPD_off_time', data=CPD_off_time, parent = '/')
+    ds_SPV = px.MicroDataset('SPV', data=SPV, parent= '/')
     grp_CPD.addChildren([ds_CPDon])
     grp_CPD.addChildren([ds_CPDoff])
+    grp_CPD.addChildren([ds_SPV])
     grp_CPD.attrs['pulse_time'] = [light_on_time[0], light_on_time[1]]
     hdf.writeData(grp_CPD, print_log=True)
 
@@ -1219,7 +1248,7 @@ plt.savefig(output_filepath+'\CPD_sample.tif', format='tiff')
 r = 36
 c = 14
 bds = ([-10, (1e-5), -5, time_on[0]-1e-10], 
-       [-1e-10, (1e-1), 5, time_on[0]+1e-10])
+       [10, (1e-1), 5, time_on[0]+1e-10])
 
 p0s = [-0.025, 1e-3, 0, time_on[0]]
 
@@ -1231,7 +1260,7 @@ plt.plot(time_on, cut)
 plt.plot(time_on, fitexp(time_on, *popt1), 'g--')
 plt.savefig(output_filepath+'\CPD_on_fitting_example.tif', format='tiff')
 
-bds = ([1e-10, (1e-5), -5, time_off[0]-1e-10], 
+bds = ([-10, (1e-5), -5, time_off[0]-1e-10], 
        [10, (1e-1), 5, time_off[0]+1e-10])
 
 cut = CPD_off[r*num_cols + c, :] - CPD_off[r*num_cols + c, 0]
@@ -1377,8 +1406,8 @@ if save_figure == True:
     
 timeslice = np.floor(np.arange(0.5, 8, .5) *1e-3/dtCPD)
 
-mn = -.031
-mx = 0.09
+mn = -.05
+mx = 0.04
 for k in timeslice:
     fig = plt.figure(figsize=(10,8))
     a = fig.add_subplot(111)
@@ -1397,6 +1426,8 @@ for k in timeslice:
 
 import matplotlib.animation as animation
 time = np.linspace(0.0, pxl_time, CPD.shape[1])
+
+plt.rcParams['animation.ffmpeg_path'] = r'C:\Users\Raj\Downloads\ffmpeg-20180124-1948b76-win64-static\bin\ffmpeg.exe'
     
 fig = plt.figure(figsize=(10,8))
 
@@ -1416,6 +1447,6 @@ ani = animation.ArtistAnimation(fig, ims, interval=150, blit=False,
                                 repeat_delay=10)
 #ani = animation.FuncAnimation(fig, update, frames=1, interval=150, blit=False,
 #                                repeat_delay=1000)
-ani.save(output_filepath + '\CPD.htm', codec='ffmpeg')
+ani.save(output_filepath+'\CPD.mp4')
     #%% 
 hdf.close()
