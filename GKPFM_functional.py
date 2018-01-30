@@ -63,7 +63,8 @@ if pre_load_files is True:
     tune_path = os.path.abspath(r'E:\ORNL\20191221_BAPI\BAPI22_TUNE__0009')
     tune_path = os.path.expanduser(tune_path)
     idx = tune_path.rfind("\\")
-    tune_file = os.path.join(tune_path, tune_path[idx+1:] + '_bigtime_00.dat')
+    tune_file = [os.path.join(tune_path, tune_path[idx+1:] + '.h5'),
+                 os.path.join(tune_path, tune_path[idx+1:] + '_bigtime_00.dat')]
     
     del(idx)
 
@@ -150,6 +151,14 @@ If you have previously translated this data you can change the data type in the 
 '''
 #%% Step 1A) Translate Tune file to HF5 format
 
+from pathlib import Path
+
+'''
+If tune file not set above, interactive.
+Otherwise, defaults to finding H5 file first. 
+If that fails, finds the .DAT files
+'''
+
 if pre_load_files is False:
     input_file_path = px.io_utils.uiGetFile(caption='Select translated .h5 file or tune data',
                                             file_filter='Parameters for raw G-Line tune (*.dat);; \
@@ -157,12 +166,17 @@ if pre_load_files is False:
 
     tune_path, _ = os.path.split(input_file_path)
     tune_file_base_name=os.path.basename(tune_path)
-else:
-    input_file_path = tune_file
 
-i =1
+else:
+    for p in tune_file:
+        print(p)
+        file = Path(p)
+        if file.is_file():
+            input_file_path = p
+            break
+        #input_file_path = tune_file
+
 if input_file_path.endswith('.dat'):
-    print(i)
     print('Translating raw data to h5. Please wait')
     tran = px.GTuneTranslator()
     h5_path = tran.translate(input_file_path)
@@ -298,9 +312,6 @@ for k1 in range(num_bandsVal):
                       Q_guess,
                       phi_guess]
 
-#    LL_vec = [0, w1/1E6,1, np.pi]
-#    UL_vec = [np.inf, w2/1E6, 10000, -np.pi]
-
     coef_vec = px.be_sho.SHOestimateGuess(response_vec, wbb, 10)
 
     response_guess_vec = px.be_sho.SHOfunc(coef_guess_vec, wbb)
@@ -331,7 +342,6 @@ for k1 in range(num_bandsVal):
     plt.ylabel('Phase (Rad)')
     plt.tight_layout(pad=0.0, w_pad=0.0, h_pad=0.0)
 
-
     if save_figure == True:
         fig.savefig(output_filepath+'\SHOFitting.eps', format='eps')
         fig.savefig(output_filepath+'\SHOFitting.tif', format='tiff')
@@ -340,6 +350,48 @@ Q = coef_mat[0,2]
 TF_norm = ((TF_fit_vec- np.min(np.abs(TF_fit_vec)))/ np.max(np.abs(TF_fit_vec))-
            np.min(np.abs(TF_fit_vec))) * Q
 
+#%% Saves data to the h5 File
+'''
+Need to save cantilever parameters, TF_nom, Q, yt0_tune, Yt0, f0, F0, TF_vec
+
+'''
+tune_items = {'TF_norm':TF_norm, 
+              'yt0_tune':yt0_tune, 
+              'Yt0_tune':Yt0_tune, 
+              'f0':f0, 
+              'F0':F0, 
+              'TF_vec':TF_vec,
+              'TF_fit_vec':TF_fit_vec}     
+
+# Create dataset if not there
+nm_base = '/Measurement_000/Tune_Values'
+grp_tune = px.MicroDataGroup(nm_base, '/')
+
+if nm_base in hdf.file:
+    print('#### Overwriting existing data set ####')
+
+else:
+    print('#### Creating new dataset:', nm_base,'####')
+    hdf.writeData(grp_tune, print_log=True)
+
+for key in tune_items:
+
+    if key in hdf.file:
+        print('==== Overwriting', key,'====')
+        grp_name = hdf.file[key][0]
+        tune_items[key] = grp_name
+
+    else:    
+        print('==== Creating', key,'====')
+        grp_item = px.MicroDataset(key, data=tune_items[key], parent = '/')
+        grp_tune.addChildren([grp_item])
+
+grp_tune.attrs['Q'] = Q
+for p in cantl_parms:
+    grp_tune.attrs[p] = cantl_parms[p]
+hdf.writeData(grp_tune, print_log=True)
+        
+hdf.flush()
 #%% Separate close file to allow debugging without errors
 hdf.close()
 
@@ -913,7 +965,7 @@ plt.plot(np.linspace(0,pxl_time,pnts_per_CPDpix), test_CPD)
 
 # This is number of periods you want to average over,
 # for best time resolution =1 (but takes longer to fit)
-periods = 4
+periods = 2
 
 # Divides each time slice into several oscillation "samples"
 num_sample_periods = int(np.floor(num_periods / periods)) # number of time points per CPD pixel
@@ -1406,8 +1458,8 @@ if save_figure == True:
     
 timeslice = np.floor(np.arange(0.5, 8, .5) *1e-3/dtCPD)
 
-mn = -.05
-mx = 0.04
+mn = -.075
+mx = -0.013
 for k in timeslice:
     fig = plt.figure(figsize=(10,8))
     a = fig.add_subplot(111)
