@@ -37,7 +37,7 @@ This notebook will allow  fast KPFM by recovery of the electrostatic foce direct
 
 import os
 
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_6ms_green700mA__0005'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_700mA__0011'
 save_figure = True
 
 output_filepath = os.path.expanduser(output_filepath)
@@ -148,6 +148,8 @@ Otherwise, defaults to finding H5 file first.
 If that fails, finds the .DAT files
 '''
 
+loadTuneValues = False
+
 if pre_load_files is False:
     input_file_path = px.io_utils.uiGetFile(caption='Select translated .h5 file or tune data',
                                             file_filter='Parameters for raw G-Line tune (*.dat);; \
@@ -162,6 +164,8 @@ else:
         file = Path(p)
         if file.is_file():
             input_file_path = p
+            print('H5 file exists! Can load from source')
+            loadTuneValues = True
             break
         #input_file_path = tune_file
 
@@ -173,7 +177,38 @@ if input_file_path.endswith('.dat'):
     
 else:
     h5_path = input_file_path
+
+#%% Loads data from H5 file instead
+'''
+Primarily just care about TF_norm, but loads all other stuff as well
+'''
+if loadTuneValues == True:
+
+    hdf = px.ioHDF5(h5_path)
+    h5_file = hdf.file
+    nm_base = '/Measurement_000/Tune_Values'
+    grp = hdf.file[nm_base]
     
+    tune_items = {'TF_norm':[], 
+                  'yt0_tune':[], 
+                  'Yt0_tune':[], 
+                  'f0':[], 
+                  'F0':[], 
+                  'TF_vec':[],
+                  'TF_fit_vec':[]}     
+    
+    cantl_parms = {'k':[], 'invols':[], 'Thermal_Q':[], 'Thermal_res':[]}
+    
+    for key in cantl_parms:
+        
+        cantl_parms[key] = list(px.hdf_utils.get_attributes(grp, key).values())[0]
+    
+    for key in tune_items:
+        
+        tune_items[key] = px.hdf_utils.getDataSet(grp, key)
+    
+    TF_norm = tune_items['TF_norm']
+
 #%% Step 1B) Extract the Resonance Modes Considered in the Force Reconstruction
 
 #define number of eigenmodes to consider
@@ -381,6 +416,7 @@ for p in cantl_parms:
 hdf.writeData(grp_tune, print_log=True)
         
 hdf.flush()
+
 #%% Separate close file to allow debugging without errors
 hdf.close()
 
@@ -496,7 +532,7 @@ if preLoaded == True:
         PCA_pre_reconstruction_clean = False
     else:
         PCA_pre_reconstruction_clean = True
-        PCA_clean_data_prerecon = PCA_clean_data_prerecon[0]
+        PCA_clean_data_prerecon = PCA_clean_data_prerecon[-1]
         h5_svd_group = PCA_clean_data_prerecon.parent.parent
         h5_U = h5_svd_group['U']
         h5_V = h5_svd_group['V']
@@ -513,7 +549,7 @@ if preLoaded == True:
         PCA_post_reconstruction_clean = False
     else:
         PCA_post_reconstruction_clean = True
-        PCA_clean_data_postrecon = PCA_clean_data_postrecon[0]
+        PCA_clean_data_postrecon = PCA_clean_data_postrecon[-1]
     
     # CPD
     CPD = px.hdf_utils.getDataSet(grp, 'CPD')[0]
