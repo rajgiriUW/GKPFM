@@ -33,30 +33,6 @@ This notebook will allow  fast KPFM by recovery of the electrostatic foce direct
 <font color=red>GIF movies and Kmeans clustering will be added. <br></font>
 
 '''
-#%%Change the filepath below, used for storing images
-
-import os
-
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_700mA__0011'
-save_figure = True
-
-output_filepath = os.path.expanduser(output_filepath)
-
-# Avoid prompts when loading data
-pre_load_files = True
-
-if pre_load_files is True:
-    idx = output_filepath.rfind("\\")
-    data_file = os.path.join(output_filepath, output_filepath[idx+1:] + '_bigtime_00.dat')
-    
-    tune_path = os.path.abspath(r'E:\ORNL\20191221_BAPI\BAPI22_TUNE__0009')
-    tune_path = os.path.expanduser(tune_path)
-    idx = tune_path.rfind("\\")
-    tune_file = [os.path.join(tune_path, tune_path[idx+1:] + '.h5'),
-                 os.path.join(tune_path, tune_path[idx+1:] + '_bigtime_00.dat')]
-    
-    del(idx)
-
 #%% Installing required packages
 
 # Checks Python Version
@@ -114,6 +90,29 @@ widget_layout=dict(
 button_layout=dict(
     width='15%',margin='0px 0px 0px 5px'
 )
+#%%Change the filepath below, used for storing images
+
+import os
+
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_700mA__0011'
+save_figure = True
+
+output_filepath = os.path.expanduser(output_filepath)
+
+# Avoid prompts when loading data
+pre_load_files = True
+
+if pre_load_files is True:
+    idx = output_filepath.rfind("\\")
+    data_file = os.path.join(output_filepath, output_filepath[idx+1:] + '_bigtime_00.dat')
+    
+    tune_path = os.path.abspath(r'E:\ORNL\20191221_BAPI\BAPI22_TUNE__0009')
+    tune_path = os.path.expanduser(tune_path)
+    idx = tune_path.rfind("\\")
+    tune_file = [os.path.join(tune_path, tune_path[idx+1:] + '.h5'),
+                 os.path.join(tune_path, tune_path[idx+1:] + '_bigtime_00.dat')]
+    
+    del(idx)
 
 #%% Define Cantilever Parameters
 '''
@@ -186,8 +185,9 @@ if loadTuneValues == True:
 
     hdf = px.ioHDF5(h5_path)
     h5_file = hdf.file
-    nm_base = '/Measurement_000/Tune_Values'
-    grp = hdf.file[nm_base]
+    nm_base = '/Measurement_000'
+    tune_base = '/Tune_Values'
+    grp = hdf.file[nm_base+tune_base]
     
     tune_items = {'TF_norm':[], 
                   'yt0_tune':[], 
@@ -205,9 +205,25 @@ if loadTuneValues == True:
     
     for key in tune_items:
         
-        tune_items[key] = px.hdf_utils.getDataSet(grp, key)
+        tune_items[key] = px.hdf_utils.getDataSet(grp, key)[0].value
     
     TF_norm = tune_items['TF_norm']
+    
+    parms_dict = px.hdf_utils.get_attributes(hdf.file[nm_base])
+
+    ex_freq = parms_dict['BE_center_frequency_[Hz]']
+    samp_rate = parms_dict['IO_rate_[Hz]']
+    N_points = parms_dict['num_bins']
+    N_points_per_line = parms_dict['points_per_line']
+    N_points_per_pixel = parms_dict['num_bins']
+    
+    dt = 1/samp_rate #delta-time in seconds
+    df = 1/dt #delta-frequency in Hz
+    
+    # Used in plotting
+    w_vec2 = np.linspace(-0.5*samp_rate,
+                         0.5*samp_rate - 1.0*samp_rate / N_points_per_line,
+                         N_points_per_line)
 
 #%% Step 1B) Extract the Resonance Modes Considered in the Force Reconstruction
 
@@ -427,9 +443,10 @@ hdf.close()
 #Step 2A) Load and Translates image file to .H5 file format
 
 # Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_6ms_green700mA__0005'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_700mA__0011'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
+aspect= 0.5 # due to G-mode approach
 
 pre_load_files = False
 if pre_load_files is False:
@@ -556,6 +573,9 @@ if preLoaded == True:
     CPD_on_time = px.hdf_utils.getDataSet(grp, 'CPD_on_time')[0]
     CPD_off_time = px.hdf_utils.getDataSet(grp, 'CPD_off_time')[0]
     
+    # Parabola fit
+    wHfit3 = px.hdf.utils.getDataset(hdf.file['/'],'parafit_main')
+    
 #%% Step 2B) Fourier Filter data
 '''
 Define filter parameters in first cell
@@ -612,7 +632,7 @@ This segment does two things:
 # Try Force Conversion on Filtered data
 
 # Phase Offset
-ph = -0.27 + np.pi   # phase from cable delays between excitation and response
+ph = -0.29 + np.pi   # phase from cable delays between excitation and response
 
 # Calculates NoiseLimit
 fft_h5row = np.fft.fftshift(np.fft.fft(h5_main[row_ind]))
@@ -707,7 +727,7 @@ h5_filt = h5_filt_grp['Filtered_Data']
 
 # Reshapes the filtered response into a matrix per-pixel instead of in lines (as recorded by NI box)
 
-print('\n','========= Done! Now reshaping... =========')
+print('\n','#### Done! Now reshaping... ####')
 h5_main_filt = px.hdf_utils.getDataSet(hdf.file,'Filtered_Data')[0]
 
 scan_width=1
@@ -757,12 +777,12 @@ if save_figure == True:
     fig.savefig(output_filepath+r'\PCARaw_Loading.tif', format='tiff')
 
 #%% PCA_Clean prior to F3R Reconstruction?
-PCA_pre_reconstruction_clean = True
+PCA_pre_reconstruction_clean = False
 
 # Filters out the components specified from h5_resh (the reshaped h5 data)
 if PCA_pre_reconstruction_clean == True:
     
-    clean_components = np.array([0,4,5]) # np.append(range(5,9),(17,18))
+    clean_components = np.array([0,1,2,3,4,5]) # np.append(range(5,9),(17,18))
     test = px.svd_utils.rebuild_svd(h5_resh, 
                                     components=clean_components)
     PCA_clean_data_prerecon = test[:,:].reshape(num_rows,-1)
@@ -844,9 +864,9 @@ fig, axes = px.plot_utils.plot_loops(pixel_ex_wfm, phaseshifted, use_rainbow_plo
                                      plots_on_side=2, y_label='Deflection (a.u.)')
 
 if PCA_pre_reconstruction_clean == False:
-    fig.savefig(output_filepath+r'\PostFilter_Displacement_noPCA.tif', format='tiff')
+    fig.savefig(output_filepath+r'\PostFilter_Displacement_noprePCA.tif', format='tiff')
 else:
-    fig.savefig(output_filepath+r'\PostFilter_Displacement_PCA.tif', format='tiff')
+    fig.savefig(output_filepath+r'\PostFilter_Displacement_prePCA.tif', format='tiff')
 
 #%% Reshaping and Storing  Results
 
@@ -906,8 +926,9 @@ if save_figure == True:
 # Visualize the eigenvectors:
 first_evecs = h5_V[:9, :]
 
-fig, axes =px.plot_utils.plot_loops(pixel_ex_wfm, first_evecs, x_label='Voltage (Vac)', use_rainbow_plots=True, y_label='Displacement (a.u.)', plots_on_side=3,
-                         subtitle_prefix='Component', title='SVD Eigenvectors (F3R)', evenly_spaced=False)
+fig, axes =px.plot_utils.plot_loops(pixel_ex_wfm, first_evecs, x_label='Voltage (Vac)', use_rainbow_plots=True, 
+                                    y_label='Displacement (a.u.)', plots_on_side=3,
+                                    subtitle_prefix='Component', title='SVD Eigenvectors (F3R)', evenly_spaced=False)
 
 if save_figure == True:
     if PCA_pre_reconstruction_clean == False:
@@ -933,7 +954,7 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0, 1,2,3]) ##Components you want to keep
+    clean_components = np.array([0, 1,7]) ##Components you want to keep
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
@@ -1040,8 +1061,6 @@ for n in range((num_rows*num_cols)):
             resp = PCA_clean_data_postrecon[n][pnts_per_CPDpix*k4:
                                                pnts_per_CPDpix*(k4+1)]
                 
-#        resp = h5_F3rresh[n][pnts_per_CPDpix*k4:
-#                             pnts_per_CPDpix*(k4+1)]
         resp = resp-np.mean(resp)
         V_per_osc = pixel_ex_wfm[pnts_per_CPDpix*k4:
                                  pnts_per_CPDpix*(k4+1)]
@@ -1252,16 +1271,16 @@ except:
 mx = np.max([np.max(CPD_on_avg), np.max(CPD_off_avg)])*1e3
 mn = np.min([np.min(CPD_on_avg), np.min(CPD_off_avg)])*1e3
 
-fig = plt.figure(figsize=(8,8))
+fig = plt.figure(figsize=(13,6))
 a = fig.add_subplot(211)
 a.set_axis_off()
 a.set_title('CPD Off Average', fontsize=12)
-a.imshow(CPD_off_avg*1e3, cmap='inferno', vmin=mn, vmax=mx)
+a.imshow(CPD_off_avg*1e3, cmap='inferno', vmin=mn, vmax=mx, aspect=aspect)
 
 a = fig.add_subplot(212)
 a.set_axis_off()
 a.set_title('CPD On Average', fontsize=12)
-im = a.imshow(CPD_on_avg*1e3, cmap='inferno', vmin=mn, vmax=mx)
+im = a.imshow(CPD_on_avg*1e3, cmap='inferno', vmin=mn, vmax=mx, aspect=aspect)
 
 cx = fig.add_axes([0.88, 0.11, 0.02, 0.77])
 cbar = fig.colorbar(im, cax=cx)
@@ -1294,18 +1313,18 @@ mxD = np.mean(testD) + 2*np.std(testD)
 mn = np.min([mnC, mnD])
 mx = np.max([mxC, mxD])
 
-fig = plt.figure(figsize=(8,6))
+fig = plt.figure(figsize=(13,6))
 a = fig.add_subplot(211)
 a.set_axis_off()
 a.set_title('CPD Off Time', fontsize=12)
-a.imshow(CPD_off_time, cmap='inferno', vmin=mn, vmax=mx)
+a.imshow(CPD_off_time, cmap='inferno', vmin=mn, vmax=mx, aspect=aspect)
 
 a = fig.add_subplot(212)
 a.set_axis_off()
 a.set_title('CPD On Time', fontsize=12)
-im = a.imshow(CPD_on_time, cmap='inferno', vmin=mn, vmax=mx)
+im = a.imshow(CPD_on_time, cmap='inferno', vmin=mn, vmax=mx, aspect=aspect)
 
-cx = fig.add_axes([0.82, 0.11, 0.02, 0.77])
+cx = fig.add_axes([0.86, 0.11, 0.02, 0.77])
 cbar = fig.colorbar(im, cax=cx)
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 
@@ -1315,14 +1334,15 @@ if save_figure == True:
     else:
         fig.savefig(output_filepath+'\CPD_times_PCA.tif', format='tiff')
 
-fig = plt.figure(figsize=(8,3))
+fig = plt.figure(figsize=(13,3))
 a = fig.add_subplot(111)
 a.set_axis_off()
 a.set_title('CPD Off Time', fontsize=12)
 a.imshow(CPD_off_time, cmap='inferno',
          vmin=(np.mean(CPD_off_time)-3*np.std(CPD_off_time)),
-         vmax=(np.mean(CPD_off_time)+3*np.std(CPD_off_time)))
-cx = fig.add_axes([0.81, 0.11, 0.02, 0.77])
+         vmax=(np.mean(CPD_off_time)+3*np.std(CPD_off_time)),
+         aspect=aspect)
+cx = fig.add_axes([0.89, 0.11, 0.02, 0.77])
 cbar = fig.colorbar(im, cax=cx)
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 if save_figure == True:
@@ -1331,14 +1351,15 @@ if save_figure == True:
     else:
         fig.savefig(output_filepath+'\CPDoff_times_PCA-Alone.tif', format='tiff')        
         
-fig = plt.figure(figsize=(8,3))
+fig = plt.figure(figsize=(13,3))
 a = fig.add_subplot(111)
 a.set_axis_off()
 a.set_title('CPD On Time', fontsize=12)
 a.imshow(CPD_on_time, cmap='inferno',
-         vmin=(np.mean(CPD_on_time)-0.2*np.std(CPD_on_time)),
-         vmax=(np.mean(CPD_on_time)+0.2*np.std(CPD_on_time)))
-cx = fig.add_axes([0.81, 0.11, 0.02, 0.77])
+         vmin=(np.mean(CPD_on_time)-2*np.std(CPD_on_time)),
+         vmax=(np.mean(CPD_on_time)+2*np.std(CPD_on_time)),
+         aspect=aspect)
+cx = fig.add_axes([0.89, 0.11, 0.02, 0.77])
 cbar = fig.colorbar(im, cax=cx)
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 if save_figure == True:
@@ -1355,7 +1376,7 @@ mx = (np.mean(SPV)+2*np.std(SPV))*1e3
 fig = plt.figure()
 a = fig.add_subplot(111)
 a.set_axis_off()
-im = a.imshow(SPV*1e3, cmap='inferno', vmin=mn, vmax=mx)
+im = a.imshow(SPV*1e3, cmap='inferno', vmin=mn, vmax=mx, aspect=aspect)
 cb = fig.colorbar(im)
 cb.set_label('SPV (mV)')
 
@@ -1511,14 +1532,14 @@ mx = np.mean(CPD_mx) + 3*np.std(CPD_mx)
 #mn = -.13
 #mx = -.0600
 for k in timeslice:
-    fig = plt.figure(figsize=(10,8))
+    fig = plt.figure(figsize=(13,3))
     a = fig.add_subplot(111)
     CPD_rs = np.reshape(CPD[:, int(k)], [64, 128])
-    im = a.imshow(CPD_rs, cmap='inferno', vmin=mn, vmax=mx)
+    im = a.imshow(CPD_rs, cmap='inferno', vmin=mn, vmax=mx, aspect=aspect)
     a.set_axis_off()
     tl = '{0:.2f}'.format(k*dtCPD/1e-3)
     plt.title('At '+ tl + ' ms', fontsize=12)
-    cx = fig.add_axes([0.92, 0.31, 0.02, 0.37])
+    cx = fig.add_axes([0.9, 0.11, 0.02, 0.77])
     cbar = fig.colorbar(im, cax=cx)
     cbar.set_label('CPD (mV)', rotation=270, labelpad=16)
     #fig.savefig(output_filepath+'\CPDslice_' + tl + '_ms.eps', format='eps')
@@ -1537,7 +1558,7 @@ ims = []
 for k in np.arange(time.shape[0]):
     a = fig.add_subplot(111)
     CPD_rs = np.reshape(CPD[:, int(k)], [64, 128])
-    im = a.imshow(CPD_rs, cmap='inferno', vmin=mn, vmax=mx, animated=True)
+    im = a.imshow(CPD_rs, cmap='inferno', vmin=mn, vmax=mx, animated=True, aspect=aspect)
     a.set_axis_off()
     htitle = 'At '+ '{0:.2f}'.format(k*dtCPD/1e-3)+ ' ms'
     tl = a.text(55,-5, htitle)
