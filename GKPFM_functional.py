@@ -37,26 +37,15 @@ This notebook will allow  fast KPFM by recovery of the electrostatic foce direct
 
 import os
 
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_500us_700mA__0009'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_6ms_green700mA__0005'
 save_figure = True
 
-# to automatically set light_on times
-a = output_filepath.find('ms')
-b = output_filepath.find('us')
-if a != -1:
-    tm = int(output_filepath[a-1])
-    light_on_time = [1, 1+tm]  # ms   
-elif b != -1:
-    tm = int(output_filepath[b-3:b])
-    light_on_time = [1, 1+tm/1000]  # ms
-del(a)
-del(b)
+output_filepath = os.path.expanduser(output_filepath)
 
 # Avoid prompts when loading data
 pre_load_files = True
 
 if pre_load_files is True:
-    output_filepath = os.path.expanduser(output_filepath)
     idx = output_filepath.rfind("\\")
     data_file = os.path.join(output_filepath, output_filepath[idx+1:] + '_bigtime_00.dat')
     
@@ -400,6 +389,12 @@ hdf.close()
 #%% Step 2) Load, Translate and Denoize the G-KPFM data
 
 #Step 2A) Load and Translates image file to .H5 file format
+
+# Set save file, can comment out and use the block above as you wish
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_6ms_green700mA__0005'
+save_figure = True
+output_filepath = os.path.expanduser(output_filepath)
+
 pre_load_files = False
 if pre_load_files is False:
     input_file_path = px.io_utils.uiGetFile(caption='Select translated .h5 file or raw experiment data',
@@ -421,6 +416,18 @@ else:
     hdf = px.ioHDF5(h5_path)
     px.hdf_utils.print_tree(hdf.file)
     preLoaded = True #for pre-loading some data
+    
+# to automatically set light_on times
+a = output_filepath.find('ms')
+b = output_filepath.find('us')
+if a != -1:
+    tm = int(output_filepath[a-1])
+    light_on_time = [1, 1+tm]  # ms   
+elif b != -1:
+    tm = int(output_filepath[b-3:b])
+    light_on_time = [1, 1+tm/1000]  # ms
+del(a)
+del(b)
     
 #%% Step 2A.i) Extract some relevant parameters
 
@@ -468,7 +475,7 @@ if preLoaded == True:
     ''' 
     Loads all the previous missing data so we can skip around to relevant functions
     '''
-
+    print('#### Loading from saved H5 ####')
     # Group addresses, assume only first members are important
     nm_base = '/Measurement_000/Channel_000'
     nm_filt_resh = 'Filtered_Data-Reshape_000'
@@ -538,7 +545,7 @@ nbf = px.processing.fft.NoiseBandFilter(num_pts, samp_rate,
 #                                        [1E3, 1E3, 1.5E3])
 
 freq_filts = [lpf, nbf]
-noise_tolerance = 1e-7
+noise_tolerance = 5e-7
 
 # Test filter on a single line:
 row_ind = 40
@@ -569,7 +576,7 @@ This segment does two things:
 # Try Force Conversion on Filtered data
 
 # Phase Offset
-ph = -0.30 + np.pi   # phase from cable delays between excitation and response
+ph = -0.27 + np.pi   # phase from cable delays between excitation and response
 
 # Calculates NoiseLimit
 fft_h5row = np.fft.fftshift(np.fft.fft(h5_main[row_ind]))
@@ -714,12 +721,12 @@ if save_figure == True:
     fig.savefig(output_filepath+r'\PCARaw_Loading.tif', format='tiff')
 
 #%% PCA_Clean prior to F3R Reconstruction?
-PCA_pre_reconstruction_clean = False
+PCA_pre_reconstruction_clean = True
 
 # Filters out the components specified from h5_resh (the reshaped h5 data)
 if PCA_pre_reconstruction_clean == True:
     
-    clean_components = np.array([0,1,2,3,4, 5, 6, 7,8]) # np.append(range(5,9),(17,18))
+    clean_components = np.array([0,4,5]) # np.append(range(5,9),(17,18))
     test = px.svd_utils.rebuild_svd(h5_resh, 
                                     components=clean_components)
     PCA_clean_data_prerecon = test[:,:].reshape(num_rows,-1)
@@ -731,6 +738,7 @@ dividing the filtered response by the effective transfer function.
 
 We further set a noise treshold, above which is included in the iFFT transform into the time domain
 '''
+
 #%% Step 3A) Divide Filtered displacement Y(w) by effective transfer function H(w)
 
 # Divide Image-data h5_main by Tune-data TF_norm
@@ -889,7 +897,7 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0, 1, 5,  6]) ##Components you want to keep
+    clean_components = np.array([0, 1,2,3]) ##Components you want to keep
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
@@ -912,7 +920,7 @@ pnts_per_CPDpix = int(N_points_per_pixel/decimation)
 tx = np.linspace(0, pxl_time, pnts_per_CPDpix) # time-axis
 
 deg = 2
-row = 2   #random sample pixel
+row = 5  #random sample pixel
 p = 3 #random oscillation in that pixel
 # note k4 cannot exceed Npoints_per_pixel/periods, obviously
 
@@ -981,6 +989,7 @@ tx = np.linspace(0, pxl_time, pnts_per_CPDpix) # time-axis
 deg = 2 #parabola
 wHfit3 = np.zeros((num_rows*num_cols, pnts_per_CPDpix, deg+1))
 
+print('#### Generating CPD from F3R ####')
 for n in range((num_rows*num_cols)):
 
     if n%1000 == 0:
@@ -1087,11 +1096,50 @@ bds_off = ([-10, (1e-5), -5, time_off[0]-1e-10],
            [10, (1e-1), 5, time_off[0]+1e-10])
 p0off = [.025, 1e-3, 0, time_off[0]]
 
+#%% Slice of one CPD set
+test = CPD[100,:]
+
+plt.figure()
+plt.plot(time,test)
+plt.xlabel('Time (ms)', fontsize=16)
+plt.ylabel('CPD (V)', fontsize=16)
+plt.savefig(output_filepath+'\CPD_sample.tif', format='tiff')
+
+# random pixel
+r = 12
+c = 14
+bds = ([-10, (1e-5), -5, time_on[0]-1e-10], 
+       [10, (1e-1), 5, time_on[0]+1e-10])
+
+p0s = [-0.025, 1e-3, 0, time_on[0]]
+
+cut = CPD_on[r*num_cols + c, :]# - CPD_on[r*num_cols + c, 0]
+popt1, _ = curve_fit(fitexp, time_on, cut, bounds=bds, p0=p0s)
+print(popt1[1]*1e3, ' ms CPD on tau')
+plt.figure()
+plt.plot(time_on, cut)
+plt.plot(time_on, fitexp(time_on, *popt1), 'g--')
+plt.savefig(output_filepath+'\CPD_on_fitting_example.tif', format='tiff')
+
+bds = ([-10, (1e-5), -5, time_off[0]-1e-10], 
+       [10, (1e-1), 5, time_off[0]+1e-10])
+
+cut = CPD_off[r*num_cols + c, :] - CPD_off[r*num_cols + c, 0]
+popt2, _ = curve_fit(fitexp, time_off, cut, bounds=bds )
+print(popt2[1]*1e3, ' ms CPD off tau')
+plt.figure()
+plt.plot(time_off, cut)
+plt.plot(time_off, fitexp(time_off, *popt2), 'r--')
+plt.savefig(output_filepath+'\CPD_off_fitting_example.tif', format='tiff')
+
 #%% Generate CPD
+print('#### Generating CPD rate images ####')
 for r in np.arange(CPD_on_avg.shape[0]):
 
-    if r%10 == 0:
+    if r%10 == 1:
         print('Row: ', r)
+        print('Average CPD on = ', np.mean(CPD_on_time[r-1, :])*1e3,'ms')
+        print('Average CPD off = ', np.mean(CPD_off_time[r-1, :])*1e3,'ms')
 
     for c in np.arange(CPD_on_avg.shape[1]):
         
@@ -1160,14 +1208,6 @@ except:
     grp_CPD.addChildren([ds_SPV])
     grp_CPD.attrs['pulse_time'] = [light_on_time[0], light_on_time[1]]
     hdf.writeData(grp_CPD, print_log=True)
-
-# Crop noisy data
-#lines_to_cut = np.arange(63, 55, -1)
-#CPD_on_avg = np.delete(CPD_on_avg, lines_to_cut, axis=0 )
-#CPD_off_avg = np.delete(CPD_off_avg, lines_to_cut, axis=0 )
-#CPD_on_time = np.delete(CPD_on_time, lines_to_cut, axis=0 )
-#CPD_off_time = np.delete(CPD_off_time, lines_to_cut, axis=0 )
-#SPV = CPD_on_avg - CPD_off_avg
 
 #%%
 # Plotting
@@ -1243,29 +1283,33 @@ fig = plt.figure(figsize=(8,3))
 a = fig.add_subplot(111)
 a.set_axis_off()
 a.set_title('CPD Off Time', fontsize=12)
-a.imshow(CPD_off_time, cmap='inferno')
+a.imshow(CPD_off_time, cmap='inferno',
+         vmin=(np.mean(CPD_off_time)-3*np.std(CPD_off_time)),
+         vmax=(np.mean(CPD_off_time)+3*np.std(CPD_off_time)))
 cx = fig.add_axes([0.81, 0.11, 0.02, 0.77])
 cbar = fig.colorbar(im, cax=cx)
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
-        fig.savefig(output_filepath+'\CPD_times_noPCA-Alone.tif', format='tiff')
+        fig.savefig(output_filepath+'\CPDoff_times_noPCA-Alone.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\CPD_times_PCA-Alone.tif', format='tiff')        
+        fig.savefig(output_filepath+'\CPDoff_times_PCA-Alone.tif', format='tiff')        
         
 fig = plt.figure(figsize=(8,3))
 a = fig.add_subplot(111)
 a.set_axis_off()
 a.set_title('CPD On Time', fontsize=12)
-a.imshow(CPD_on_time, cmap='inferno')
+a.imshow(CPD_on_time, cmap='inferno',
+         vmin=(np.mean(CPD_on_time)-0.2*np.std(CPD_on_time)),
+         vmax=(np.mean(CPD_on_time)+0.2*np.std(CPD_on_time)))
 cx = fig.add_axes([0.81, 0.11, 0.02, 0.77])
 cbar = fig.colorbar(im, cax=cx)
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
-        fig.savefig(output_filepath+'\CPD_times_noPCA-Alone.tif', format='tiff')
+        fig.savefig(output_filepath+'\CPDon_times_noPCA-Alone.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\CPD_times_PCA-Alone.tif', format='tiff')    
+        fig.savefig(output_filepath+'\CPDon_times_PCA-Alone.tif', format='tiff')    
 #%%
 # SPV plotting
 
@@ -1286,42 +1330,6 @@ if save_figure == True:
     else:
         fig.savefig(output_filepath+'\SPV_noPCApost.eps', format='eps')
         fig.savefig(output_filepath+'\SPV_noPCApost.tif', format='tiff')
-
-#%% Slice of one CPD set
-test = CPD[100,:]
-
-plt.figure()
-plt.plot(time,test)
-plt.xlabel('Time (ms)', fontsize=16)
-plt.ylabel('CPD (V)', fontsize=16)
-plt.savefig(output_filepath+'\CPD_sample.tif', format='tiff')
-
-# random pixel
-r = 36
-c = 14
-bds = ([-10, (1e-5), -5, time_on[0]-1e-10], 
-       [10, (1e-1), 5, time_on[0]+1e-10])
-
-p0s = [-0.025, 1e-3, 0, time_on[0]]
-
-cut = CPD_on[r*num_cols + c, :]# - CPD_on[r*num_cols + c, 0]
-popt1, _ = curve_fit(fitexp, time_on, cut, bounds=bds, p0=p0s)
-print(popt1[1]*1e3, ' ms CPD on tau')
-plt.figure()
-plt.plot(time_on, cut)
-plt.plot(time_on, fitexp(time_on, *popt1), 'g--')
-plt.savefig(output_filepath+'\CPD_on_fitting_example.tif', format='tiff')
-
-bds = ([-10, (1e-5), -5, time_off[0]-1e-10], 
-       [10, (1e-1), 5, time_off[0]+1e-10])
-
-cut = CPD_off[r*num_cols + c, :] - CPD_off[r*num_cols + c, 0]
-popt2, _ = curve_fit(fitexp, time_off, cut, bounds=bds )
-print(popt2[1]*1e3, ' ms CPD off tau')
-plt.figure()
-plt.plot(time_off, cut)
-plt.plot(time_off, fitexp(time_off, *popt2), 'r--')
-plt.savefig(output_filepath+'\CPD_off_fitting_example.tif', format='tiff')
 
 #%% CPD vs time
 
@@ -1458,8 +1466,14 @@ if save_figure == True:
     
 timeslice = np.floor(np.arange(0.5, 8, .5) *1e-3/dtCPD)
 
-mn = -.075
-mx = -0.013
+# find correct mn and mx for color scale
+CPD_mn = np.reshape(CPD[:, p_on+int((p_off-p_on)/2)], [64, 128])
+mn = np.mean(CPD_mn) - 3*np.std(CPD_mn)
+CPD_mx = np.reshape(CPD[:, p_off+int((CPD.shape[1]-p_off)/2)], [64, 128])
+mx = np.mean(CPD_mx) + 3*np.std(CPD_mx)
+
+#mn = -.13
+#mx = -.0600
 for k in timeslice:
     fig = plt.figure(figsize=(10,8))
     a = fig.add_subplot(111)
@@ -1502,3 +1516,4 @@ ani = animation.ArtistAnimation(fig, ims, interval=150, blit=False,
 ani.save(output_filepath+'\CPD.mp4')
     #%% 
 hdf.close()
+del(output_filepath)
