@@ -443,7 +443,7 @@ hdf.close()
 #Step 2A) Load and Translates image file to .H5 file format
 
 # Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_10mA__0014'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_2ms_700mA__0006'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
 aspect= 0.5 # due to G-mode approach
@@ -574,7 +574,7 @@ if preLoaded == True:
     CPD_off_time = px.hdf_utils.getDataSet(grp, 'CPD_off_time')[0]
     
     # Parabola fit
-    wHfit3 = px.hdf.utils.getDataset(hdf.file['/'],'parafit_main')
+    wHfit3 = px.hdf_utils.getDataSet(hdf.file['/'],'parafit_main')
     
 #%% Step 2B) Fourier Filter data
 '''
