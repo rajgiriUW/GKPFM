@@ -443,7 +443,7 @@ hdf.close()
 #Step 2A) Load and Translates image file to .H5 file format
 
 # Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_700mA__0011'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_10mA__0014'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
 aspect= 0.5 # due to G-mode approach
@@ -777,7 +777,7 @@ if save_figure == True:
     fig.savefig(output_filepath+r'\PCARaw_Loading.tif', format='tiff')
 
 #%% PCA_Clean prior to F3R Reconstruction?
-PCA_pre_reconstruction_clean = False
+PCA_pre_reconstruction_clean = True
 
 # Filters out the components specified from h5_resh (the reshaped h5 data)
 if PCA_pre_reconstruction_clean == True:
@@ -954,7 +954,7 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0, 1,7]) ##Components you want to keep
+    clean_components = np.array([0, 1,2]) ##Components you want to keep
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
@@ -967,17 +967,27 @@ if PCA_post_reconstruction_clean == True:
 # This is number of periods you want to average over,
 # for best time resolution =1 (but takes longer to fit)
 periods = 2
+complete_periods = True
  
 num_periods_per_sample = int(np.floor(num_periods / periods))
 pnts_per_sample = int(np.floor(pnts_per_period * periods))
 
-# new approach since it's base-2 samples and can curve-fit to less than full cycle
-decimation = 2**int(np.ceil(np.log2(pnts_per_sample)))
-pnts_per_CPDpix = int(N_points_per_pixel/decimation)
-tx = np.linspace(0, pxl_time, pnts_per_CPDpix) # time-axis
+if complete_periods == False:
+    # new approach since it's base-2 samples and can curve-fit to less than full cycle
+    decimation = 2**int(np.floor(np.log2(pnts_per_sample)))
+    pnts_per_CPDpix = int(N_points_per_pixel/decimation)
+    remainder = 0
+else:
+    # old approach, but add section for missing period at the end
+    decimation = int(np.floor(pnts_per_sample))
+    pnts_per_CPDpix = int(N_points_per_pixel/decimation)
+    remainder = N_points_per_pixel - pnts_per_CPDpix*decimation
+
+# time scale for plotting
+tx = np.linspace(0, pxl_time, pnts_per_CPDpix) 
 
 deg = 2
-row = 5  #random sample pixel
+row = 4*num_cols+14  #random sample pixel
 p = 3 #random oscillation in that pixel
 # note k4 cannot exceed Npoints_per_pixel/periods, obviously
 
@@ -992,7 +1002,6 @@ else:
     resp = PCA_clean_data_postrecon[row][pnts_per_CPDpix*p:pnts_per_CPDpix*(p+1)]
 
 resp=resp-np.mean(resp)
-print(resp.shape)
 V_per_osc=pixel_ex_wfm[pnts_per_CPDpix*p:pnts_per_CPDpix*(p+1)]
 
 p1,s = npPoly.polyfit(V_per_osc,resp,deg,full=True)
@@ -1004,44 +1013,58 @@ plt.plot(V_per_osc,resp, 'k')
 plt.plot(V_per_osc,y1, 'g')
 
 test_wH = np.zeros((pnts_per_CPDpix, deg+1))
-test_CPD = np.zeros(pnts_per_CPDpix)
-for p in range(pnts_per_CPDpix): #osc_period
+
+for p in range(pnts_per_CPDpix-min(1,remainder)):
 
     if PCA_post_reconstruction_clean == False:
-        resp = h5_F3Rresh[row][pnts_per_CPDpix*p:
-                             pnts_per_CPDpix*(p+1)]
+        resp = h5_F3Rresh[row][decimation*p:decimation*(p+1)]
     else:
-        resp = PCA_clean_data_postrecon[row][pnts_per_CPDpix*p:
-                                           pnts_per_CPDpix*(p+1)]
+        resp = PCA_clean_data_postrecon[row][decimation*p:decimation*(p+1)]
             
-#        resp = h5_F3rresh[n][pnts_per_CPDpix*k4:
-#                             pnts_per_CPDpix*(k4+1)]
     resp = (resp-np.mean(resp))
-    # -1 here is because somehow excitation is flipped compared to MATLAB 
-    V_per_osc = pixel_ex_wfm[pnts_per_CPDpix*p:
-                             pnts_per_CPDpix*(p+1)]
+    V_per_osc = pixel_ex_wfm[decimation*p:decimation*(p+1)]
     popt, _ = npPoly.polyfit(V_per_osc, resp, deg, full=True)
     test_wH[p] = popt
+
+# if using complete periods approach, then last point will be cycle+leftover
+if remainder > 0:
+    if PCA_post_reconstruction_clean == False:
+        resp = h5_F3Rresh[row][(pnts_per_CPDpix-1)*decimation:]
+    else:
+        resp = PCA_clean_data_postrecon[row][(pnts_per_CPDpix-1)*decimation:]            
+   
+    resp = (resp-np.mean(resp))
+    V_per_osc = pixel_ex_wfm[(pnts_per_CPDpix-1)*decimation:]
+    popt, _ = npPoly.polyfit(V_per_osc, resp, deg, full=True)
+    
+    test_wH[-1,:] = popt
     
 test_CPD = -0.5 * test_wH[:,1]/test_wH[:,2]
 plt.figure()
-plt.plot(np.linspace(0,pxl_time,pnts_per_CPDpix), test_CPD)
+plt.plot(tx, test_CPD)
 #%% Repeat on the full dataset
 
 # This is number of periods you want to average over,
 # for best time resolution =1 (but takes longer to fit)
 periods = 2
-
-# Divides each time slice into several oscillation "samples"
-num_sample_periods = int(np.floor(num_periods / periods)) # number of time points per CPD pixel
+complete_periods = True
+ 
+num_periods_per_sample = int(np.floor(num_periods / periods))
 pnts_per_sample = int(np.floor(pnts_per_period * periods))
-pnts_per_CPDpix = pnts_per_sample
 
-# new approach since it's base-2 samples and can curve-fit to less than full cycle
-decimation = 2**int(np.ceil(np.log2(pnts_per_sample)))
-pnts_per_CPDpix = int(N_points_per_pixel/decimation)
+if complete_periods == False:
+    # new approach since it's base-2 samples and can curve-fit to less than full cycle
+    decimation = 2**int(np.floor(np.log2(pnts_per_sample)))
+    pnts_per_CPDpix = int(N_points_per_pixel/decimation)
+    remainder = 0
+else:
+    # old approach, but add section for missing period at the end
+    decimation = int(np.floor(pnts_per_sample))
+    pnts_per_CPDpix = int(N_points_per_pixel/decimation)
+    remainder = N_points_per_pixel - pnts_per_CPDpix*decimation
 
-tx = np.linspace(0, pxl_time, pnts_per_CPDpix) # time-axis
+# time scale for plotting
+tx = np.linspace(0, pxl_time, pnts_per_CPDpix) 
 
 deg = 2 #parabola
 wHfit3 = np.zeros((num_rows*num_cols, pnts_per_CPDpix, deg+1))
@@ -1052,20 +1075,30 @@ for n in range((num_rows*num_cols)):
     if n%1000 == 0:
         print('Pixel: ', n)
         
-    for k4 in range(pnts_per_CPDpix): #osc_period
+    for p in range(pnts_per_CPDpix-min(1,remainder)): 
 
         if PCA_post_reconstruction_clean == False:
-            resp = h5_F3Rresh[n][pnts_per_CPDpix*k4:
-                                 pnts_per_CPDpix*(k4+1)]
+            resp = h5_F3Rresh[n][decimation*p:decimation*(p+1)]
         else:
-            resp = PCA_clean_data_postrecon[n][pnts_per_CPDpix*k4:
-                                               pnts_per_CPDpix*(k4+1)]
+            resp = PCA_clean_data_postrecon[n][decimation*p:decimation*(p+1)]
                 
         resp = resp-np.mean(resp)
-        V_per_osc = pixel_ex_wfm[pnts_per_CPDpix*k4:
-                                 pnts_per_CPDpix*(k4+1)]
-        p1, _ = npPoly.polyfit(V_per_osc, resp, deg, full=True)
-        wHfit3[n,k4,:] = p1
+        V_per_osc = pixel_ex_wfm[decimation*p:decimation*(p+1)]
+        popt, _ = npPoly.polyfit(V_per_osc, resp, deg, full=True)
+        wHfit3[n,p,:] = popt
+        
+    # if using complete periods approach, then last point will be cycle+leftover
+    if remainder > 0:
+        if PCA_post_reconstruction_clean == False:
+            resp = h5_F3Rresh[n][(pnts_per_CPDpix-1)*decimation:]
+        else:
+            resp = PCA_clean_data_postrecon[n][(pnts_per_CPDpix-1)*decimation:]            
+       
+        resp = (resp-np.mean(resp))
+        V_per_osc = pixel_ex_wfm[(pnts_per_CPDpix-1)*decimation:]
+        popt, _ = npPoly.polyfit(V_per_osc, resp, deg, full=True)
+        
+        wHfit3[n,-1,:] = popt
     
 # polyfit returns a + bx + cx^2 coefficients
         
@@ -1152,17 +1185,18 @@ bds_off = ([-10, (1e-5), -5, time_off[0]-1e-10],
 p0off = [.025, 1e-3, 0, time_off[0]]
 
 #%% Slice of one CPD set
-test = CPD[100,:]
 
+# random pixel
+r = 4
+c = 14
+
+test = CPD[r*num_cols+c,:]
 plt.figure()
 plt.plot(time,test)
 plt.xlabel('Time (ms)', fontsize=16)
 plt.ylabel('CPD (V)', fontsize=16)
 plt.savefig(output_filepath+'\CPD_sample.tif', format='tiff')
 
-# random pixel
-r = 12
-c = 14
 bds = ([-10, (1e-5), -5, time_on[0]-1e-10], 
        [10, (1e-1), 5, time_on[0]+1e-10])
 
@@ -1339,8 +1373,8 @@ a = fig.add_subplot(111)
 a.set_axis_off()
 a.set_title('CPD Off Time', fontsize=12)
 a.imshow(CPD_off_time, cmap='inferno',
-         vmin=(np.mean(CPD_off_time)-3*np.std(CPD_off_time)),
-         vmax=(np.mean(CPD_off_time)+3*np.std(CPD_off_time)),
+         vmin=mnD,
+         vmax=mxD,
          aspect=aspect)
 cx = fig.add_axes([0.89, 0.11, 0.02, 0.77])
 cbar = fig.colorbar(im, cax=cx)
@@ -1356,8 +1390,8 @@ a = fig.add_subplot(111)
 a.set_axis_off()
 a.set_title('CPD On Time', fontsize=12)
 a.imshow(CPD_on_time, cmap='inferno',
-         vmin=(np.mean(CPD_on_time)-2*np.std(CPD_on_time)),
-         vmax=(np.mean(CPD_on_time)+2*np.std(CPD_on_time)),
+         vmin=mnC,
+         vmax=mxC,
          aspect=aspect)
 cx = fig.add_axes([0.89, 0.11, 0.02, 0.77])
 cbar = fig.colorbar(im, cax=cx)
@@ -1373,7 +1407,8 @@ if save_figure == True:
 # 1e3 to put in mV
 mn = (np.mean(SPV)-2*np.std(SPV))*1e3
 mx = (np.mean(SPV)+2*np.std(SPV))*1e3
-fig = plt.figure()
+fig = plt.figure(figsize=(13,3))
+a = fig.add_subplot(111)
 a = fig.add_subplot(111)
 a.set_axis_off()
 im = a.imshow(SPV*1e3, cmap='inferno', vmin=mn, vmax=mx, aspect=aspect)
