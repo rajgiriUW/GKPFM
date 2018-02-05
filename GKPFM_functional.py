@@ -94,7 +94,7 @@ button_layout=dict(
 
 import os
 
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_700mA__0011'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_2ms_700mA__0006'
 save_figure = True
 
 output_filepath = os.path.expanduser(output_filepath)
@@ -122,13 +122,21 @@ In particular the lever sensitivity (m/V) and Spring Constant (N/m)
 '''
 
 # 'k', 'invols', 'Thermal_Q', 'Thermal_resonance'
-cantl_parms = dict()
+tune_items = {'TF_norm':[], 
+              'yt0_tune':[], 
+              'Yt0_tune':[], 
+              'f0':[], 
+              'F0':[], 
+              'TF_vec':[],
+              'TF_fit_vec':[]}     
+
+cantl_parms = {'k':[], 'invols':[], 'Thermal_Q':[], 'Thermal_res':[]}
+
+# defaults
 cantl_parms['k'] = 1.7 # N/M
 cantl_parms['invols'] = 82.76e-9 # m/V
 cantl_parms['Thermal_Q'] = 80
 cantl_parms['Thermal_res'] = 57076 #Hz
-
-print(cantl_parms)
 
 #%% Step 1) Model the Cantilever Transfer Function
 
@@ -189,16 +197,6 @@ if loadTuneValues == True:
     tune_base = '/Tune_Values'
     grp = hdf.file[nm_base+tune_base]
     
-    tune_items = {'TF_norm':[], 
-                  'yt0_tune':[], 
-                  'Yt0_tune':[], 
-                  'f0':[], 
-                  'F0':[], 
-                  'TF_vec':[],
-                  'TF_fit_vec':[]}     
-    
-    cantl_parms = {'k':[], 'invols':[], 'Thermal_Q':[], 'Thermal_res':[]}
-    
     for key in cantl_parms:
         
         cantl_parms[key] = list(px.hdf_utils.get_attributes(grp, key).values())[0]
@@ -213,6 +211,7 @@ if loadTuneValues == True:
 
     ex_freq = parms_dict['BE_center_frequency_[Hz]']
     samp_rate = parms_dict['IO_rate_[Hz]']
+    
     N_points = parms_dict['num_bins']
     N_points_per_line = parms_dict['points_per_line']
     N_points_per_pixel = parms_dict['num_bins']
@@ -443,7 +442,7 @@ hdf.close()
 #Step 2A) Load and Translates image file to .H5 file format
 
 # Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_2ms_700mA__0006'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_4ms_700mA__0007'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
 aspect= 0.5 # due to G-mode approach
@@ -569,9 +568,24 @@ if preLoaded == True:
         PCA_clean_data_postrecon = PCA_clean_data_postrecon[-1]
     
     # CPD
-    CPD = px.hdf_utils.getDataSet(grp, 'CPD')[0]
-    CPD_on_time = px.hdf_utils.getDataSet(grp, 'CPD_on_time')[0]
-    CPD_off_time = px.hdf_utils.getDataSet(grp, 'CPD_off_time')[0]
+    CPD = px.hdf_utils.getDataSet(grp, 'CPD')[0][0]
+    CPD_on_time = px.hdf_utils.getDataSet(grp, 'CPD_on_time')[0][0]
+    CPD_off_time = px.hdf_utils.getDataSet(grp, 'CPD_off_time')[0][0]
+    
+    CPD_off_avg = np.zeros(CPD_on_time.shape)
+    CPD_on_avg = np.zeros(CPD_on_time.shape)
+    parms_dict = h5_main.parent.parent.attrs
+    num_rows = parms_dict['grid_num_rows']
+    num_cols = parms_dict['grid_num_cols']
+    dtCPD = pxl_time/CPD.shape[1] 
+    p_on = int(light_on_time[0]*1e-3 / dtCPD) 
+    p_off = int(light_on_time[1]*1e-3 / dtCPD) 
+    
+    for r in np.arange(CPD_on_time.shape[0]):
+        for c in np.arange(CPD_on_time.shape[1]):
+            CPD_off_avg[r][c] = np.mean(CPD[r*num_cols + c,p_on:p_off])
+            CPD_on_avg[r][c] = np.mean(CPD[r*num_cols + c,p_on:p_off])
+    
     
     # Parabola fit
     wHfit3 = px.hdf_utils.getDataSet(hdf.file['/'],'parafit_main')
@@ -777,7 +791,7 @@ if save_figure == True:
     fig.savefig(output_filepath+r'\PCARaw_Loading.tif', format='tiff')
 
 #%% PCA_Clean prior to F3R Reconstruction?
-PCA_pre_reconstruction_clean = True
+PCA_pre_reconstruction_clean = False
 
 # Filters out the components specified from h5_resh (the reshaped h5 data)
 if PCA_pre_reconstruction_clean == True:
@@ -786,6 +800,7 @@ if PCA_pre_reconstruction_clean == True:
     test = px.svd_utils.rebuild_svd(h5_resh, 
                                     components=clean_components)
     PCA_clean_data_prerecon = test[:,:].reshape(num_rows,-1)
+
 
 #%% Step 3) Fast Free Force Reconstruction
 '''
@@ -954,7 +969,7 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0, 1,2]) ##Components you want to keep
+    clean_components = np.array([0,1,2,3]) ##Components you want to keep
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
@@ -1150,6 +1165,9 @@ hdf.file.flush()
 def fitexp(x, A, tau, y0, x0):
     return A * np.exp(-(x - x0) /tau) + y0
 
+def fitbiexp(x, A1, tau1, A2, tau2, y0, x0):
+    return A1*np.exp(-(x-x0)/tau1) + A2*np.exp(-(x-x0)/tau2) + y0
+
 #%% Visualize CPD vs time
 
 # Separate CPDs into "light on" and "light off" case
@@ -1176,6 +1194,9 @@ CPD_off_avg = np.zeros((num_rows, num_cols))
 CPD_on_time = np.zeros((num_rows, num_cols))
 CPD_off_time = np.zeros((num_rows, num_cols))
 
+CPD_on_mag = np.zeros((num_rows, num_cols))
+CPD_off_mag  = np.zeros((num_rows, num_cols))
+
 bds_on = ([-10, (1e-5), -5, time_on[0]-1e-10], 
        [10, (1e-1), 5, time_on[0]+1e-10])
 p0on = [-0.025, 1e-3, 0, time_on[0]]
@@ -1187,11 +1208,11 @@ p0off = [.025, 1e-3, 0, time_off[0]]
 #%% Slice of one CPD set
 
 # random pixel
-r = 4
-c = 14
+r = 30
+c = 40
 
 test = CPD[r*num_cols+c,:]
-plt.figure()
+plt.figure(figsize=(8,6))
 plt.plot(time,test)
 plt.xlabel('Time (ms)', fontsize=16)
 plt.ylabel('CPD (V)', fontsize=16)
@@ -1202,10 +1223,10 @@ bds = ([-10, (1e-5), -5, time_on[0]-1e-10],
 
 p0s = [-0.025, 1e-3, 0, time_on[0]]
 
-cut = CPD_on[r*num_cols + c, :]# - CPD_on[r*num_cols + c, 0]
+cut = CPD_on[r*num_cols + c, :] - CPD_on[r*num_cols + c, 0]
 popt1, _ = curve_fit(fitexp, time_on, cut, bounds=bds, p0=p0s)
 print(popt1[1]*1e3, ' ms CPD on tau')
-plt.figure()
+plt.figure(figsize=(8,6))
 plt.plot(time_on, cut)
 plt.plot(time_on, fitexp(time_on, *popt1), 'g--')
 plt.savefig(output_filepath+'\CPD_on_fitting_example.tif', format='tiff')
@@ -1216,10 +1237,21 @@ bds = ([-10, (1e-5), -5, time_off[0]-1e-10],
 cut = CPD_off[r*num_cols + c, :] - CPD_off[r*num_cols + c, 0]
 popt2, _ = curve_fit(fitexp, time_off, cut, bounds=bds )
 print(popt2[1]*1e3, ' ms CPD off tau')
-plt.figure()
+plt.figure(figsize=(8,6))
 plt.plot(time_off, cut)
 plt.plot(time_off, fitexp(time_off, *popt2), 'r--')
 plt.savefig(output_filepath+'\CPD_off_fitting_example.tif', format='tiff')
+
+bds = ([-10, 1e-5, -10, 1e-5, -5, time_on[0]-1e-10], 
+       [10, 1e-1, 10, 1, 5, time_on[0]+1e-10])
+cut = CPD_on[r*num_cols + c, :] - CPD_on[r*num_cols + c, 0]
+popt1, _ = curve_fit(fitbiexp, time_on, cut, bounds=bds)
+print(popt1[1]*1e3, ' ms CPD on tau', popt1[3]*1e3,' ms CPD on tau2')
+plt.figure(figsize=(8,6))
+plt.plot(time_on, cut)
+plt.plot(time_on, fitbiexp(time_on, *popt1), 'g--')
+plt.savefig(output_filepath+'\CPD_on_fitting_example-biexponential.tif', format='tiff')
+
 
 #%% Generate CPD
 print('#### Generating CPD rate images ####')
@@ -1238,6 +1270,7 @@ for r in np.arange(CPD_on_avg.shape[0]):
             popt, _ = curve_fit(fitexp, time_on, cut, 
                                 bounds=bds_on, p0=p0on)
             CPD_on_time[r][c] = popt[1]
+            CPD_on_mag[r][c] = popt[0]
         except:
             CPD_on_time[r][c] = CPD_on_time[r][c-1] # blur bad pixels
             print( 'error_on')
@@ -1249,6 +1282,7 @@ for r in np.arange(CPD_on_avg.shape[0]):
         try:
             popt, _ = curve_fit(fitexp, time_off, cut, bounds=bds_off)
             CPD_off_time[r][c] = popt[1]
+            CPD_off_mag[r][c] = popt[0]
         except:
             CPD_off_time[r][c] = CPD_off_time[r][c-1] #blur bad pixels
             print( 'error')
@@ -1311,6 +1345,7 @@ a.set_axis_off()
 a.set_title('CPD Off Average', fontsize=12)
 a.imshow(CPD_off_avg*1e3, cmap='inferno', vmin=mn, vmax=mx, aspect=aspect)
 
+
 a = fig.add_subplot(212)
 a.set_axis_off()
 a.set_title('CPD On Average', fontsize=12)
@@ -1329,20 +1364,16 @@ if save_figure == True:
         fig.savefig(output_filepath+'\CPDon_vs_off_noPCApost.eps', format='eps')
         fig.savefig(output_filepath+'\CPDon_vs_off_noPCApost.tif', format='tiff')
     
-# Rate images
-mx = np.max([np.max(CPD_on_time), np.max(CPD_off_time)])*1e3
-mn = np.min([np.min(CPD_on_time), np.min(CPD_off_time)])*1e3
-
 # some clean-up for plotting to remove curve-fit errors
 from scipy import signal
 
 testC = signal.medfilt(CPD_on_time, kernel_size=[3,3])
 testD = signal.medfilt(CPD_off_time, kernel_size=[3,3])
 
-mnC = np.mean(testC) - 2*np.std(testC)
-mxC = np.mean(testC) + 2*np.std(testC)
-mnD = np.mean(testD) - 2*np.std(testD)
-mxD = np.mean(testD) + 2*np.std(testD)
+mnC = (np.mean(testC) - 2*np.std(testC))*1e3
+mxC = (np.mean(testC) + 2*np.std(testC))*1e3
+mnD = (np.mean(testD) - 2*np.std(testD))*1e3
+mxD = (np.mean(testD) + 2*np.std(testD))*1e3
 
 mn = np.min([mnC, mnD])
 mx = np.max([mxC, mxD])
@@ -1351,12 +1382,12 @@ fig = plt.figure(figsize=(13,6))
 a = fig.add_subplot(211)
 a.set_axis_off()
 a.set_title('CPD Off Time', fontsize=12)
-a.imshow(CPD_off_time, cmap='inferno', vmin=mn, vmax=mx, aspect=aspect)
+a.imshow(CPD_off_time*1e3, cmap='inferno', vmin=mn, vmax=mx, aspect=aspect)
 
 a = fig.add_subplot(212)
 a.set_axis_off()
 a.set_title('CPD On Time', fontsize=12)
-im = a.imshow(CPD_on_time, cmap='inferno', vmin=mn, vmax=mx, aspect=aspect)
+im = a.imshow(CPD_on_time*1e3, cmap='inferno', vmin=mn, vmax=mx, aspect=aspect)
 
 cx = fig.add_axes([0.86, 0.11, 0.02, 0.77])
 cbar = fig.colorbar(im, cax=cx)
@@ -1372,9 +1403,7 @@ fig = plt.figure(figsize=(13,3))
 a = fig.add_subplot(111)
 a.set_axis_off()
 a.set_title('CPD Off Time', fontsize=12)
-a.imshow(CPD_off_time, cmap='inferno',
-         vmin=mnD,
-         vmax=mxD,
+im = a.imshow(CPD_off_time*1e3, cmap='inferno', vmin=mnD, vmax=mxD,
          aspect=aspect)
 cx = fig.add_axes([0.89, 0.11, 0.02, 0.77])
 cbar = fig.colorbar(im, cax=cx)
@@ -1389,9 +1418,7 @@ fig = plt.figure(figsize=(13,3))
 a = fig.add_subplot(111)
 a.set_axis_off()
 a.set_title('CPD On Time', fontsize=12)
-a.imshow(CPD_on_time, cmap='inferno',
-         vmin=mnC,
-         vmax=mxC,
+im = a.imshow(CPD_on_time*1e3, cmap='inferno',vmin=mnC,vmax=mxC,
          aspect=aspect)
 cx = fig.add_axes([0.89, 0.11, 0.02, 0.77])
 cbar = fig.colorbar(im, cax=cx)
@@ -1401,6 +1428,7 @@ if save_figure == True:
         fig.savefig(output_filepath+'\CPDon_times_noPCA-Alone.tif', format='tiff')
     else:
         fig.savefig(output_filepath+'\CPDon_times_PCA-Alone.tif', format='tiff')    
+        
 #%%
 # SPV plotting
 
@@ -1439,6 +1467,7 @@ for col in indices:
     print(CPD_off_time[row, col], ' s CPD off time at ', row, ' ', col)
     print(CPD_on_time[row, col], ' s CPD on time at ', row, ' ', col)
     
+
 #%% Data Visualization of separate CPDs
     
 from sklearn.utils.extmath import randomized_svd
