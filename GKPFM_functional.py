@@ -568,9 +568,9 @@ if preLoaded == True:
         PCA_clean_data_postrecon = PCA_clean_data_postrecon[-1]
     
     # CPD
-    CPD = px.hdf_utils.getDataSet(grp, 'CPD')[0][0]
-    CPD_on_time = px.hdf_utils.getDataSet(grp, 'CPD_on_time')[0][0]
-    CPD_off_time = px.hdf_utils.getDataSet(grp, 'CPD_off_time')[0][0]
+    CPD = px.hdf_utils.getDataSet(grp, 'CPD')[0]
+    CPD_on_time = px.hdf_utils.getDataSet(grp, 'CPD_on_time')[0]
+    CPD_off_time = px.hdf_utils.getDataSet(grp, 'CPD_off_time')[0]
     
     CPD_off_avg = np.zeros(CPD_on_time.shape)
     CPD_on_avg = np.zeros(CPD_on_time.shape)
