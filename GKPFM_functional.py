@@ -445,7 +445,10 @@ hdf.close()
 output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_500us_700mA__0009'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
-aspect= 0.5 # due to G-mode approach
+
+img_length = 32e-6
+img_height = 8.5e-6
+aspect = 0.5 # due to G-mode approach
 
 pre_load_files = False
 if pre_load_files is False:
@@ -506,6 +509,13 @@ IO_rate = parms_dict['IO_rate_[Hz]']     #sampling_rate
 pnts_per_period = IO_rate * time_per_osc #points per oscillation period
 pxl_time = N_points_per_pixel/IO_rate    #seconds per pixel
 num_periods = int(pxl_time/time_per_osc) #total # of periods per pixel, should be an integer
+
+parms_dict['length'] = img_length
+parms_dict['height'] = img_height
+
+grp_CPD = px.MicroDataGroup(h5_main.parent.parent.name)
+grp_CPD.attrs['length'] = img_length
+grp_CPD.attrs['height'] = img_height
 
 # Excitation waveform for a single pixel
 pixel_ex_wfm = h5_spec_vals[0, :int(h5_spec_vals.shape[1]/num_cols)]
@@ -1339,22 +1349,18 @@ except:
 mx = np.max([np.max(CPD_on_avg), np.max(CPD_off_avg)])*1e3
 mn = np.min([np.min(CPD_on_avg), np.min(CPD_off_avg)])*1e3
 
-fig = plt.figure(figsize=(13,6))
-a = fig.add_subplot(211)
-a.set_axis_off()
-a.set_title('CPD Off Average', fontsize=12)
-a.imshow(CPD_off_avg*1e3, cmap='inferno', vmin=mn, vmax=mx, aspect=aspect)
-
-
-a = fig.add_subplot(212)
-a.set_axis_off()
-a.set_title('CPD On Average', fontsize=12)
-im = a.imshow(CPD_on_avg*1e3, cmap='inferno', vmin=mn, vmax=mx, aspect=aspect)
-
-cx = fig.add_axes([0.88, 0.11, 0.02, 0.77])
-cbar = fig.colorbar(im, cax=cx)
+fig, a = plt.subplots(nrows=2, figsize=(13, 6))
+_, cbar = px.plot_utils.plot_map(a[0], CPD_off_avg*1e3, cmap='inferno', aspect=aspect, 
+                       x_size=img_length*1e6, y_size=img_height*1e6, stdevs = 2,
+                       cbar_label='CPV (mV)')
 cbar.set_label('CPD (mV)', rotation=270, labelpad=16)
-#plt.tight_layout(pad=0.0, w_pad=0.0, h_pad=0.0)
+a[0].set_title('CPD Off Average', fontsize=12)
+
+_, cbar = px.plot_utils.plot_map(a[1], CPD_on_avg*1e3, cmap='inferno', aspect=aspect, 
+                       x_size=img_length*1e6, y_size=img_height*1e6, stdevs = 2,
+                       cbar_label='CPV (mV)')
+cbar.set_label('CPD (mV)', rotation=270, labelpad=16)
+a[1].set_title('CPD On Average', fontsize=12)
 
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
