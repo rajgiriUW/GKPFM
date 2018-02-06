@@ -442,7 +442,7 @@ hdf.close()
 #Step 2A) Load and Translates image file to .H5 file format
 
 # Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_4ms_700mA__0007'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_500us_700mA__0009'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
 aspect= 0.5 # due to G-mode approach
@@ -583,7 +583,7 @@ if preLoaded == True:
     
     for r in np.arange(CPD_on_time.shape[0]):
         for c in np.arange(CPD_on_time.shape[1]):
-            CPD_off_avg[r][c] = np.mean(CPD[r*num_cols + c,p_on:p_off])
+            CPD_off_avg[r][c] = np.mean(CPD[r*num_cols + c,p_off:])
             CPD_on_avg[r][c] = np.mean(CPD[r*num_cols + c,p_on:p_off])
     
     
@@ -791,7 +791,7 @@ if save_figure == True:
     fig.savefig(output_filepath+r'\PCARaw_Loading.tif', format='tiff')
 
 #%% PCA_Clean prior to F3R Reconstruction?
-PCA_pre_reconstruction_clean = False
+PCA_pre_reconstruction_clean = True
 
 # Filters out the components specified from h5_resh (the reshaped h5 data)
 if PCA_pre_reconstruction_clean == True:
@@ -969,7 +969,7 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,1,2,3]) ##Components you want to keep
+    clean_components = np.array([0,1,2]) ##Components you want to keep
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
@@ -1466,7 +1466,30 @@ for col in indices:
     plt.plot(CPD[row*num_cols + col,:-1])
     print(CPD_off_time[row, col], ' s CPD off time at ', row, ' ', col)
     print(CPD_on_time[row, col], ' s CPD on time at ', row, ' ', col)
-    
+
+#%% Apply grain mask as needed
+
+from pixelCPD import averagemask
+
+mask = np.fliplr(np.transpose(np.loadtxt('E:/ORNL/20191221_BAPI/BAPI6-9 Text/BAPI20_grain_mask.txt')))
+CPD_GB_avg = averagemask(CPD, mask)
+CPD_GC_avg = averagemask(CPD, mask, avg_flag = 1)
+mask[mask==1] = np.nan
+
+fig, a = plt.subplots()
+a.set_title('CPD On Time', fontsize=12)
+plt.plot( CPD_GB_avg ,'k', label='GB')
+plt.plot( CPD_GC_avg, 'r', label='GC')
+a.legend(fontsize=14)
+if save_figure == True:
+    fig.savefig(output_filepath+'\CPDon_Skree.eps', format='eps')
+    fig.savefig(output_filepath+'\CPDon_Skree.tif', format='tiff')
+
+fig = plt.figure()
+a = fig.add_subplot(111)
+a.imshow(CPD_on_avg, cmap='inferno')
+a.imshow(mask)
+a.set_title('CPD with Mask')
 
 #%% Data Visualization of separate CPDs
     
