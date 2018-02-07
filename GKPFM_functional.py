@@ -94,7 +94,7 @@ button_layout=dict(
 
 import os
 
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_2ms_700mA__0006'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_700mA__0011'
 save_figure = True
 
 output_filepath = os.path.expanduser(output_filepath)
@@ -441,8 +441,10 @@ hdf.close()
 
 #Step 2A) Load and Translates image file to .H5 file format
 
+from pathlib import Path
+
 # Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_500us_700mA__0009'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_2ms_700mA__0006'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
 
@@ -461,11 +463,16 @@ else:
 folder_path, _ = os.path.split(input_file_path)
 
 if input_file_path.endswith('.dat'):
-    print('Translating raw data to h5. Please wait')
-    tran = px.GLineTranslator()
-    h5_path = tran.translate(input_file_path)
-    hdf = px.ioHDF5(h5_path)
-    preLoaded = False
+    file = Path(input_file_path[:-3]+'.h5')
+    if file.is_file():
+        print('Cannot unintentionally overwrite H5 file')
+        raise ReferenceError
+    else:
+        print('Translating raw data to h5. Please wait')
+        tran = px.GLineTranslator()
+        h5_path = tran.translate(input_file_path)
+        hdf = px.ioHDF5(h5_path)
+        preLoaded = False
 else:
     h5_path = input_file_path
     hdf = px.ioHDF5(h5_path)
@@ -530,6 +537,7 @@ w_vec_pix = 1E-3*np.linspace(-0.5*samp_rate, 0.5*samp_rate - samp_rate/pnts_per_
 # Preparing the time axis:
 t_vec_line = 1E3*np.linspace(0, num_pts/samp_rate, num_pts)
 t_vec_pix = 1E3*np.linspace(0, pnts_per_pix/samp_rate, pnts_per_pix)
+
 
 #%% Load previous data
 
@@ -765,23 +773,34 @@ h5_resh.shape
 h5_svd = px.processing.svd_utils.SVD(h5_resh, num_components=256)
 h5_svd_group = h5_svd.compute()
 
-h5_U = h5_svd_group['U']
-h5_V = h5_svd_group['V']
-h5_S = h5_svd_group['S']
+h5_Uprecon = h5_svd_group['U']
+h5_Vprecon = h5_svd_group['V']
+h5_Sprecon = h5_svd_group['S']
+
+skree_sum = np.zeros(h5_Sprecon.shape)
+
+for i in range(h5_Sprecon.shape[0]):
+    skree_sum[i] = np.sum(h5_Sprecon[:i])/np.sum(h5_Sprecon)
+
+plt.figure()
+plt.plot(skree_sum, 'o')
+print('Need', skree_sum[skree_sum<0.8].shape[0],'components for 80%')
+print('Need', skree_sum[skree_sum<0.9].shape[0],'components for 90%')
+print('Need', skree_sum[skree_sum<0.95].shape[0],'components for 95%')
 
 # Since the two spatial dimensions (x, y) have been collapsed to one, we need to reshape the abundance maps:
 # The "25" is how many of the eigenvectors to keep
 abun_maps = np.reshape(h5_U[:,:25], (num_rows, num_cols,-1))
 
 # Visualize the variance / statistical importance of each component:
-fig, axes =px.plot_utils.plot_scree(h5_S, title='Skree plot')
+fig, axes =px.plot_utils.plot_scree(h5_Sprecon, title='Skree plot')
 
 if save_figure == True:
     fig.savefig(output_filepath+'\PCARaw_Skree.eps', format='eps')
     fig.savefig(output_filepath+'\PCARaw_Skree.tif', format='tiff')
 
 # Visualize the eigenvectors; 
-first_evecs = h5_V[:9, :]
+first_evecs = h5_Vprecon[:9, :]
 
 fig, axes =px.plot_utils.plot_loops(pixel_ex_wfm, first_evecs, use_rainbow_plots=True, 
                                     x_label='Voltage (Vac)', y_label='Displacement (a.u.)', 
@@ -793,7 +812,7 @@ if save_figure == True:
     fig.savefig(output_filepath+'\PCARaw_Eig.tif', format='tiff')
 
 # Visualize the abundance maps:
-fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, heading='SVD Abundance Maps',
+fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=25, heading='SVD Abundance Maps',
                                         color_bar_mode='single', cmap='inferno')
 
 if save_figure == True:
@@ -806,7 +825,9 @@ PCA_pre_reconstruction_clean = True
 # Filters out the components specified from h5_resh (the reshaped h5 data)
 if PCA_pre_reconstruction_clean == True:
     
+    # important! If choosing components, min is 3 or interprets as start/stop range of slice
     clean_components = np.array([0,1,2,3,4,5]) # np.append(range(5,9),(17,18))
+    
     test = px.svd_utils.rebuild_svd(h5_resh, 
                                     components=clean_components)
     PCA_clean_data_prerecon = test[:,:].reshape(num_rows,-1)
@@ -947,6 +968,17 @@ if save_figure == True:
         fig.savefig(output_filepath+'\PCAF3R_Skree_withPrePCA.eps', format='eps')
         fig.savefig(output_filepath+'\PCF3R_Skree_withPrePCA.tif', format='tiff')
 
+skree_sum = np.zeros(h5_S.shape)
+
+for i in range(h5_S.shape[0]):
+    skree_sum[i] = np.sum(h5_S[:i])/np.sum(h5_S)
+
+plt.figure()
+plt.plot(skree_sum, 'o')
+print('Need', skree_sum[skree_sum<0.8].shape[0],'components for 80%')
+print('Need', skree_sum[skree_sum<0.9].shape[0],'components for 90%')
+print('Need', skree_sum[skree_sum<0.95].shape[0],'components for 95%')
+print('Need', skree_sum[skree_sum<0.99].shape[0],'components for 99%')
 
 # Visualize the eigenvectors:
 first_evecs = h5_V[:9, :]
@@ -979,7 +1011,7 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,1,2]) ##Components you want to keep
+    clean_components = np.array([0,1, 3,4,5,7]) ##Components you want to keep
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
@@ -1215,10 +1247,11 @@ bds_off = ([-10, (1e-5), -5, time_off[0]-1e-10],
            [10, (1e-1), 5, time_off[0]+1e-10])
 p0off = [.025, 1e-3, 0, time_off[0]]
 
+
 #%% Slice of one CPD set
 
 # random pixel
-r = 30
+r = 40
 c = 40
 
 test = CPD[r*num_cols+c,:]
