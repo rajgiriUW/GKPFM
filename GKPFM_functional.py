@@ -444,7 +444,7 @@ hdf.close()
 from pathlib import Path
 
 # Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_2ms_700mA__0006'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_700mA__0011'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
 
@@ -463,7 +463,7 @@ else:
 folder_path, _ = os.path.split(input_file_path)
 
 if input_file_path.endswith('.dat'):
-    file = Path(input_file_path[:-3]+'.h5')
+    file = Path(input_file_path[:-15]+'.h5')
     if file.is_file():
         print('Cannot unintentionally overwrite H5 file')
         raise ReferenceError
@@ -676,6 +676,7 @@ Noiselimit = np.ceil(noise_floor)
 G_line = np.zeros(w_vec2.size,dtype=complex)         # G = raw
 G_wPhase_line = np.zeros(w_vec2.size,dtype=complex)  # G_wphase = phase-shifted
 
+
 signal_ind_vec = np.arange(w_vec2.size)
 ind_drive = (np.abs(w_vec2-ex_freq)).argmin()
 
@@ -790,7 +791,7 @@ print('Need', skree_sum[skree_sum<0.95].shape[0],'components for 95%')
 
 # Since the two spatial dimensions (x, y) have been collapsed to one, we need to reshape the abundance maps:
 # The "25" is how many of the eigenvectors to keep
-abun_maps = np.reshape(h5_U[:,:25], (num_rows, num_cols,-1))
+abun_maps = np.reshape(h5_Uprecon[:,:25], (num_rows, num_cols,-1))
 
 # Visualize the variance / statistical importance of each component:
 fig, axes =px.plot_utils.plot_scree(h5_Sprecon, title='Skree plot')
@@ -812,7 +813,7 @@ if save_figure == True:
     fig.savefig(output_filepath+'\PCARaw_Eig.tif', format='tiff')
 
 # Visualize the abundance maps:
-fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=25, heading='SVD Abundance Maps',
+fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, heading='SVD Abundance Maps',
                                         color_bar_mode='single', cmap='inferno')
 
 if save_figure == True:
@@ -898,11 +899,11 @@ px.plot_utils.set_tick_font_size(ax, 14)
 
 if save_figure == True:
     if PCA_pre_reconstruction_clean == False:
-        fig.savefig(output_filepath+r'\Noise_Spectra_noPCA.eps', format='eps')
-        fig.savefig(output_filepath+r'\Noise_Spectra_noPCA.tif', format='tiff')
+        fig.savefig(output_filepath+r'\Noise_Spectra_noprePCA.eps', format='eps')
+        fig.savefig(output_filepath+r'\Noise_Spectra_noprePCA.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+r'\Noise_Spectra_PCA.eps', format='eps')
-        fig.savefig(output_filepath+r'\Noise_Spectra_PCA.tif', format='tiff')        
+        fig.savefig(output_filepath+r'\Noise_Spectra_prePCA.eps', format='eps')
+        fig.savefig(output_filepath+r'\Noise_Spectra_prePCA.tif', format='tiff')        
 
 phaseshifted = G_time[i].reshape(-1, pixel_ex_wfm.size)
 fig, axes = px.plot_utils.plot_loops(pixel_ex_wfm, phaseshifted, use_rainbow_plots=True, 
@@ -981,10 +982,10 @@ print('Need', skree_sum[skree_sum<0.95].shape[0],'components for 95%')
 print('Need', skree_sum[skree_sum<0.99].shape[0],'components for 99%')
 
 # Visualize the eigenvectors:
-first_evecs = h5_V[:9, :]
+first_evecs = h5_V[:25, :]
 
 fig, axes =px.plot_utils.plot_loops(pixel_ex_wfm, first_evecs, x_label='Voltage (Vac)', use_rainbow_plots=True, 
-                                    y_label='Displacement (a.u.)', plots_on_side=3,
+                                    y_label='Displacement (a.u.)', plots_on_side=5,
                                     subtitle_prefix='Component', title='SVD Eigenvectors (F3R)', evenly_spaced=False)
 
 if save_figure == True:
@@ -992,11 +993,12 @@ if save_figure == True:
         fig.savefig(output_filepath+'\PCAF3R_Eig_noPrePCA.eps', format='eps')
         fig.savefig(output_filepath+'\PCF3R_Eig_noPrePCA.tif', format='tiff')
     else:
+        
         fig.savefig(output_filepath+'\PCAF3R_Eig_withPrePCA.eps', format='eps')
         fig.savefig(output_filepath+'\PCF3R_Eig_withPrePCA.tif', format='tiff')
 
 # Visualize the abundance maps:
-fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, heading='SVD Abundance Maps',
+fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=25, heading='SVD Abundance Maps',
                              color_bar_mode='single', cmap='inferno')
 if save_figure == True:
     if PCA_pre_reconstruction_clean == False:
@@ -1011,7 +1013,7 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,1, 3,4,5,7]) ##Components you want to keep
+    clean_components = np.array([0,1,7]) ##Components you want to keep
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
@@ -1251,7 +1253,7 @@ p0off = [.025, 1e-3, 0, time_off[0]]
 #%% Slice of one CPD set
 
 # random pixel
-r = 40
+r = 32
 c = 40
 
 test = CPD[r*num_cols+c,:]
@@ -1438,30 +1440,27 @@ if save_figure == True:
     else:
         fig.savefig(output_filepath+'\CPD_times_PCA.tif', format='tiff')
 
-fig = plt.figure(figsize=(13,3))
-a = fig.add_subplot(111)
-a.set_axis_off()
-a.set_title('CPD Off Time', fontsize=12)
-im = a.imshow(CPD_off_time*1e3, cmap='inferno', vmin=mnD, vmax=mxD,
-         aspect=aspect)
-cx = fig.add_axes([0.89, 0.11, 0.02, 0.77])
-cbar = fig.colorbar(im, cax=cx)
+fig, a = plt.subplots(nrows=1, figsize=(13, 3))
+_, cbar = px.plot_utils.plot_map(a, CPD_off_time*1e3, cmap='inferno', aspect=aspect, 
+                       x_size=img_length*1e6, y_size=img_height*1e6, stdevs = 2,
+                       cbar_label='CPV (mV)')
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
+a.set_title('CPD Off Time', fontsize=12)
+
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
         fig.savefig(output_filepath+'\CPDoff_times_noPCA-Alone.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\CPDoff_times_PCA-Alone.tif', format='tiff')        
-        
-fig = plt.figure(figsize=(13,3))
-a = fig.add_subplot(111)
-a.set_axis_off()
-a.set_title('CPD On Time', fontsize=12)
-im = a.imshow(CPD_on_time*1e3, cmap='inferno',vmin=mnC,vmax=mxC,
-         aspect=aspect)
-cx = fig.add_axes([0.89, 0.11, 0.02, 0.77])
-cbar = fig.colorbar(im, cax=cx)
+        fig.savefig(output_filepath+'\CPDoff_times_PCA-Alone.tif', format='tiff')    
+
+       
+fig, a = plt.subplots(nrows=1, figsize=(13, 3))
+_, cbar = px.plot_utils.plot_map(a, CPD_on_time*1e3, cmap='inferno', aspect=aspect, 
+                       x_size=img_length*1e6, y_size=img_height*1e6, stdevs = 2,
+                       cbar_label='CPV (mV)')
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
+a.set_title('CPD On Time', fontsize=12)
+
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
         fig.savefig(output_filepath+'\CPDon_times_noPCA-Alone.tif', format='tiff')
@@ -1472,15 +1471,12 @@ if save_figure == True:
 # SPV plotting
 
 # 1e3 to put in mV
-mn = (np.mean(SPV)-2*np.std(SPV))*1e3
-mx = (np.mean(SPV)+2*np.std(SPV))*1e3
-fig = plt.figure(figsize=(13,3))
-a = fig.add_subplot(111)
-a = fig.add_subplot(111)
-a.set_axis_off()
-im = a.imshow(SPV*1e3, cmap='inferno', vmin=mn, vmax=mx, aspect=aspect)
-cb = fig.colorbar(im)
-cb.set_label('SPV (mV)')
+fig, a = plt.subplots(nrows=1, figsize=(13, 3))
+_, cbar = px.plot_utils.plot_map(a, SPV*1e3, cmap='inferno', aspect=aspect, 
+                       x_size=img_length*1e6, y_size=img_height*1e6, stdevs = 2,
+                       cbar_label='SPV (mV)')
+cbar.set_label('SPV (mV)', rotation=270, labelpad=16)
+a.set_title('SPV (mV)', fontsize=12)
 
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
@@ -1521,8 +1517,16 @@ plt.plot( CPD_GB_avg ,'k', label='GB')
 plt.plot( CPD_GC_avg, 'r', label='GC')
 a.legend(fontsize=14)
 if save_figure == True:
-    fig.savefig(output_filepath+'\CPDon_Skree.eps', format='eps')
-    fig.savefig(output_filepath+'\CPDon_Skree.tif', format='tiff')
+    fig.savefig(output_filepath+'\CPD_GBavg.eps', format='eps')
+    fig.savefig(output_filepath+'\CPD_GBavg.tif', format='tiff')
+
+fig, a = plt.subplots()
+a.set_title('CPD On Time', fontsize=12)
+plt.plot( CPD_GB_avg-CPD_GB_avg[0] ,'k', label='GB')
+plt.plot( CPD_GC_avg-CPD_GC_avg[0], 'r', label='GC')
+a.legend(fontsize=14)
+if save_figure == True:
+    fig.savefig(output_filepath+'\CPD_GBavg_norm.tif', format='tiff')
 
 fig = plt.figure()
 a = fig.add_subplot(111)
@@ -1697,6 +1701,11 @@ ani = animation.ArtistAnimation(fig, ims, interval=150, blit=False,
 #ani = animation.FuncAnimation(fig, update, frames=1, interval=150, blit=False,
 #                                repeat_delay=1000)
 ani.save(output_filepath+'\CPD.mp4')
+
+#%% Cross-sectional animation
+
+
+
     #%% 
 hdf.close()
 del(output_filepath)
