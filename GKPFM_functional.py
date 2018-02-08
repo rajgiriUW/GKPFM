@@ -1688,7 +1688,7 @@ ims = []
 for k in np.arange(time.shape[0]):
     a = fig.add_subplot(111)
     CPD_rs = np.reshape(CPD[:, int(k)], [64, 128])
-    im = a.imshow(CPD_rs, cmap='inferno', vmin=mn, vmax=mx, animated=True, aspect=aspect)
+    im = a.imshow(CPD_rs, cmap='inferno', vmin=mn, vmax=mx, animated=True, aspect=aspect, origin='lower')
     a.set_axis_off()
     htitle = 'At '+ '{0:.2f}'.format(k*dtCPD/1e-3)+ ' ms'
     tl = a.text(55,-5, htitle)
@@ -1704,7 +1704,45 @@ ani.save(output_filepath+'\CPD.mp4')
 
 #%% Cross-sectional animation
 
+# note shape of CPD is 64x128, not 128x64
+cpts = [31, 62] #column points, row points
+rpts = [44, 44]
 
+clen = cpts[1] - cpts[0]
+rlen = rpts[1] - rpts[0]
+pxl_size = img_length/num_cols
+pxl_ht = img_height/num_rows
+
+ccoords = np.arange(cpts[0],cpts[1])
+rcoords = np.arange(rpts[0],rpts[1])
+
+linecoords = np.arange(rpts[0]*num_cols + cpts[0], rpts[0]*num_cols + cpts[1])
+
+time = np.linspace(0.0, pxl_time, CPD.shape[1])
+xax = np.linspace(0, pxl_size*clen, clen)
+
+# create indices to plot
+
+fig, a = plt.subplots(nrows=2, figsize=(13, 6))
+a[0].imshow(CPD_on_avg, cmap='inferno',aspect=aspect, origin='lower',
+            extent=[0, img_length*1e6, 0, img_height*1e6])
+a[0].plot(ccoords*pxl_size*1e6, rpts[0]*pxl_ht*1e6*np.ones(len(ccoords)))
+
+ims = []
+a[1].set_xlabel('Distance (um)')
+a[1].set_ylabel('CPD (mV)')
+
+for k in np.arange(time.shape[0]):
+    
+    sectn = CPD[linecoords,k]
+    im, = a[1].plot(xax*1e6,sectn*1e3, 'r^-')   #comma unpacks into a list to add titles
+    htitle = 'At '+ '{0:.2f}'.format(k*dtCPD/1e-3)+ ' ms'
+    tl = a[1].text(3.5, -25, htitle)
+    ims.append([im, tl])
+
+ani = animation.ArtistAnimation(fig, ims, interval=150,repeat_delay=10)
+
+ani.save(output_filepath+'\CPD_graph.mp4')
 
     #%% 
 hdf.close()
