@@ -444,7 +444,7 @@ hdf.close()
 from pathlib import Path
 
 # Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_700mA__0011'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_10mA__0014'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
 
@@ -827,7 +827,7 @@ PCA_pre_reconstruction_clean = True
 if PCA_pre_reconstruction_clean == True:
     
     # important! If choosing components, min is 3 or interprets as start/stop range of slice
-    clean_components = np.array([0,1,2,3,4,5]) # np.append(range(5,9),(17,18))
+    clean_components = np.array([0,1,2,4,5]) # np.append(range(5,9),(17,18))
     
     test = px.svd_utils.rebuild_svd(h5_resh, 
                                     components=clean_components)
@@ -993,7 +993,6 @@ if save_figure == True:
         fig.savefig(output_filepath+'\PCAF3R_Eig_noPrePCA.eps', format='eps')
         fig.savefig(output_filepath+'\PCF3R_Eig_noPrePCA.tif', format='tiff')
     else:
-        
         fig.savefig(output_filepath+'\PCAF3R_Eig_withPrePCA.eps', format='eps')
         fig.savefig(output_filepath+'\PCF3R_Eig_withPrePCA.tif', format='tiff')
 
@@ -1013,13 +1012,21 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,1,7]) ##Components you want to keep
+    clean_components = np.array([0, 1, 2, 4, 6]) ##Components you want to keep
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
     test = px.svd_utils.rebuild_svd(h5_F3Rresh, 
                                     components=clean_components)
     PCA_clean_data_postrecon = test[:,:].reshape(num_rows*num_cols,-1)
+
+#%% Fit function for CPD
+
+def fitexp(x, A, tau, y0, x0):
+    return A * np.exp(-(x - x0) /tau) + y0
+
+def fitbiexp(x, A1, tau1, A2, tau2, y0, x0):
+    return A1*np.exp(-(x-x0)/tau1) + A2*np.exp(-(x-x0)/tau2) + y0
 
 #%% Test fitting on sample data
 
@@ -1042,11 +1049,14 @@ else:
     pnts_per_CPDpix = int(N_points_per_pixel/decimation)
     remainder = N_points_per_pixel - pnts_per_CPDpix*decimation
 
+print('Time resolution:',pxl_time/pnts_per_CPDpix)
+
 # time scale for plotting
 tx = np.linspace(0, pxl_time, pnts_per_CPDpix) 
 
 deg = 2
 row = 4*num_cols+14  #random sample pixel
+
 p = 3 #random oscillation in that pixel
 # note k4 cannot exceed Npoints_per_pixel/periods, obviously
 
@@ -1073,34 +1083,71 @@ plt.plot(V_per_osc,y1, 'g')
 
 test_wH = np.zeros((pnts_per_CPDpix, deg+1))
 
-for p in range(pnts_per_CPDpix-min(1,remainder)):
+rows = [4*num_cols+14, 44*num_cols+16, 32*num_cols+67]  
+fig,a = plt.subplots(nrows=1, figsize=(8,6))
+a.set_xlabel('Time (s)')
+a.set_ylabel('CPD (V)')
+a.set_title('Random CPD pixels')
 
-    if PCA_post_reconstruction_clean == False:
-        resp = h5_F3Rresh[row][decimation*p:decimation*(p+1)]
-    else:
-        resp = PCA_clean_data_postrecon[row][decimation*p:decimation*(p+1)]
-            
-    resp = (resp-np.mean(resp))
-    V_per_osc = pixel_ex_wfm[decimation*p:decimation*(p+1)]
-    popt, _ = npPoly.polyfit(V_per_osc, resp, deg, full=True)
-    test_wH[p] = popt
+# For testing CPD fits
+p_on = int(light_on_time[0]*1e-3 * pnts_per_CPDpix/pxl_time) 
+p_off = int(light_on_time[1]*1e-3 * pnts_per_CPDpix/pxl_time) 
 
-# if using complete periods approach, then last point will be cycle+leftover
-if remainder > 0:
-    if PCA_post_reconstruction_clean == False:
-        resp = h5_F3Rresh[row][(pnts_per_CPDpix-1)*decimation:]
+time = np.linspace(0, pxl_time, pnts_per_CPDpix)
+time_on = time[p_on:p_off]
+time_off = time[p_off:]   
+
+bds_on = ([-10, (1e-5), -5, time_on[0]-1e-10], 
+          [10, (1e-1), 5, time_on[0]+1e-10])  
+bds_off = ([-10, (1e-5), -5, time_off[0]-1e-10], 
+           [10, (1e-1), 5, time_off[0]+1e-10])  
+
+plot_fits = True
+for row in rows:
+    for p in range(pnts_per_CPDpix-min(1,remainder)):
+    
+        if PCA_post_reconstruction_clean == False:
+            resp = h5_F3Rresh[row][decimation*p:decimation*(p+1)]
+        else:
+            resp = PCA_clean_data_postrecon[row][decimation*p:decimation*(p+1)]
+                
+        resp = (resp-np.mean(resp))
+        V_per_osc = pixel_ex_wfm[decimation*p:decimation*(p+1)]
+        popt, _ = npPoly.polyfit(V_per_osc, resp, deg, full=True)
+        test_wH[p] = popt
+    
+    # if using complete periods approach, then last point will be cycle+leftover
+    if remainder > 0:
+        if PCA_post_reconstruction_clean == False:
+            resp = h5_F3Rresh[row][(pnts_per_CPDpix-1)*decimation:]
+        else:
+            resp = PCA_clean_data_postrecon[row][(pnts_per_CPDpix-1)*decimation:]            
+       
+        resp = (resp-np.mean(resp))
+        V_per_osc = pixel_ex_wfm[(pnts_per_CPDpix-1)*decimation:]
+        popt, _ = npPoly.polyfit(V_per_osc, resp, deg, full=True)
+        
+        test_wH[-1,:] = popt
+    
+    if plot_fits == True:    
+        test_CPD = -0.5 * test_wH[:,1]/test_wH[:,2]
+        [cuton, cutoff] = [test_CPD[p_on:p_off] - test_CPD[0], test_CPD[p_off:] - test_CPD[0]]
+        popt1, _ = curve_fit(fitexp, time_on, cuton, bounds=bds_on)
+        popt2, _ = curve_fit(fitexp, time_off, cutoff, bounds=bds_off)
+        a.plot(tx, test_CPD-test_CPD[0], time_on, fitexp(time_on, *popt1), time_off, fitexp(time_off, *popt2))
+        print(popt1[1]*1e3,' ms for ON')
+        print(popt2[1]*1e3,' ms for OFF')
     else:
-        resp = PCA_clean_data_postrecon[row][(pnts_per_CPDpix-1)*decimation:]            
-   
-    resp = (resp-np.mean(resp))
-    V_per_osc = pixel_ex_wfm[(pnts_per_CPDpix-1)*decimation:]
-    popt, _ = npPoly.polyfit(V_per_osc, resp, deg, full=True)
-    
-    test_wH[-1,:] = popt
-    
-test_CPD = -0.5 * test_wH[:,1]/test_wH[:,2]
-plt.figure()
-plt.plot(tx, test_CPD)
+        a.plot(tx, test_CPD-test_CPD[0])
+        
+prerecon = 'PrePCA' if PCA_pre_reconstruction_clean == True else ''
+        
+if PCA_post_reconstruction_clean == True:
+    fig.savefig(output_filepath+'\RandomCPDs_'+prerecon+'PCA'+str(clean_components)
+                +'_'+str(periods)+'periods.tif', format='tiff')
+else:
+    fig.savefig(output_filepath+'\RandomCPDs_'+prerecon+'noPCA_'+str(periods)+'periods.tif', format='tiff')
+
 #%% Repeat on the full dataset
 
 # This is number of periods you want to average over,
@@ -1204,14 +1251,6 @@ except:
     
 hdf.file.flush()
 
-#%% Fit function for CPD
-
-def fitexp(x, A, tau, y0, x0):
-    return A * np.exp(-(x - x0) /tau) + y0
-
-def fitbiexp(x, A1, tau1, A2, tau2, y0, x0):
-    return A1*np.exp(-(x-x0)/tau1) + A2*np.exp(-(x-x0)/tau2) + y0
-
 #%% Visualize CPD vs time
 
 # Separate CPDs into "light on" and "light off" case
@@ -1238,6 +1277,10 @@ CPD_off_avg = np.zeros((num_rows, num_cols))
 CPD_on_time = np.zeros((num_rows, num_cols))
 CPD_off_time = np.zeros((num_rows, num_cols))
 
+CPD_bion_time = np.zeros((num_rows, num_cols))
+CPD_bioff_time_fast = np.zeros((num_rows, num_cols))
+CPD_bioff_time_slow = np.zeros((num_rows, num_cols))
+
 CPD_on_mag = np.zeros((num_rows, num_cols))
 CPD_off_mag  = np.zeros((num_rows, num_cols))
 
@@ -1248,7 +1291,6 @@ p0on = [-0.025, 1e-3, 0, time_on[0]]
 bds_off = ([-10, (1e-5), -5, time_off[0]-1e-10], 
            [10, (1e-1), 5, time_off[0]+1e-10])
 p0off = [.025, 1e-3, 0, time_off[0]]
-
 
 #%% Slice of one CPD set
 
@@ -1287,18 +1329,30 @@ plt.plot(time_off, cut)
 plt.plot(time_off, fitexp(time_off, *popt2), 'r--')
 plt.savefig(output_filepath+'\CPD_off_fitting_example.tif', format='tiff')
 
-bds = ([-10, 1e-5, -10, 1e-5, -5, time_on[0]-1e-10], 
-       [10, 1e-1, 10, 1, 5, time_on[0]+1e-10])
+bds_bion = ([1e-15,     1e-5,   1e-15,     1e-5,   -5, time_on[0]-1e-10], 
+       [1,         1e-1,   5,      500,   5,  time_on[0]+1e-10])
 cut = CPD_on[r*num_cols + c, :] - CPD_on[r*num_cols + c, 0]
-popt1, _ = curve_fit(fitbiexp, time_on, cut, bounds=bds)
+popt1, _ = curve_fit(fitbiexp, time_on, cut, bounds=bds_bion)
 print(popt1[1]*1e3, ' ms CPD on tau', popt1[3]*1e3,' ms CPD on tau2')
 plt.figure(figsize=(8,6))
 plt.plot(time_on, cut)
 plt.plot(time_on, fitbiexp(time_on, *popt1), 'g--')
 plt.savefig(output_filepath+'\CPD_on_fitting_example-biexponential.tif', format='tiff')
 
+bds_bioff = ([-5,     1e-5,   -5,     1e-5,   -5, time_off[0]-1e-10], 
+       [-1e-15, 1e-1,   -1e-15,      500,   5,  time_off[0]+1e-10])
+cut = CPD_off[r*num_cols + c, :] - CPD_off[r*num_cols + c, 0]
+popt1, _ = curve_fit(fitbiexp, time_off, cut, bounds=bds_bioff)
+print(popt1[1]*1e3, ' ms CPD off tau', popt1[3]*1e3,' ms CPD on tau2')
+plt.figure(figsize=(8,6))
+plt.plot(time_off, cut)
+plt.plot(time_off, fitbiexp(time_off, *popt1), 'g--')
+plt.savefig(output_filepath+'\CPD_off_fitting_example-biexponential.tif', format='tiff')
 
 #%% Generate CPD
+
+doBiexp_fit = False
+
 print('#### Generating CPD rate images ####')
 for r in np.arange(CPD_on_avg.shape[0]):
 
@@ -1316,11 +1370,16 @@ for r in np.arange(CPD_on_avg.shape[0]):
                                 bounds=bds_on, p0=p0on)
             CPD_on_time[r][c] = popt[1]
             CPD_on_mag[r][c] = popt[0]
+            
+            if doBiexp_fit == True:
+                #biexponential
+                popt, _ = curve_fit(fitbiexp, time_on, cut, bounds=bds_bion)
+                CPD_bion_time[r][c] = popt[1]   # takes tau1, the "fast" part
         except:
             CPD_on_time[r][c] = CPD_on_time[r][c-1] # blur bad pixels
+            CPD_bion_time[r][c] = CPD_bion_time[r][c-1] #blur bad pixels
             print( 'error_on')
             print(r, ' ', c)
-            break
 
         CPD_off_avg[r][c] = np.mean(CPD_off[r*num_cols + c,:])
         cut = CPD_off[r*num_cols + c, :] - CPD_off[r*num_cols + c, 0]
@@ -1328,12 +1387,19 @@ for r in np.arange(CPD_on_avg.shape[0]):
             popt, _ = curve_fit(fitexp, time_off, cut, bounds=bds_off)
             CPD_off_time[r][c] = popt[1]
             CPD_off_mag[r][c] = popt[0]
+            
+            if doBiexp_fit == True:
+                #biexponential
+                popt, _ = curve_fit(fitbiexp, time_off, cut, bounds=bds_bioff)
+                CPD_bioff_time_fast[r][c] = popt[1]   # takes tau1, the "fast" part
+                CPD_bioff_time_slow[r][c] = popt[3]   # takes tau1, the "fast" part
         except:
             CPD_off_time[r][c] = CPD_off_time[r][c-1] #blur bad pixels
+            CPD_bioff_time_fast[r][c] = CPD_bioff_time_fast[r][c-1] #blur bad pixels
+            CPD_bioff_time_slow[r][c] = CPD_bioff_time_slow[r][c-1] #blur bad pixels
             print( 'error')
             print(r, ' ', c)
-            break
-            
+
 SPV = CPD_on_avg - CPD_off_avg
 
 if PCA_post_reconstruction_clean == True:
