@@ -448,7 +448,7 @@ output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_10mA__0014'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
 
-img_length = 32e-6
+img_length = 34e-6
 img_height = 8.5e-6
 aspect = 0.5 # due to G-mode approach
 
@@ -1351,6 +1351,7 @@ plt.savefig(output_filepath+'\CPD_off_fitting_example-biexponential.tif', format
 
 #%% Generate CPD
 
+# Biexponential fitting makes this very slow! Warning!
 doBiexp_fit = False
 
 print('#### Generating CPD rate images ####')
@@ -1523,7 +1524,7 @@ if save_figure == True:
 fig, a = plt.subplots(nrows=1, figsize=(13, 3))
 _, cbar = px.plot_utils.plot_map(a, CPD_on_time*1e3, cmap='inferno', aspect=aspect, 
                        x_size=img_length*1e6, y_size=img_height*1e6, stdevs = 2,
-                       cbar_label='CPV (mV)')
+                       cbar_label='CPV (mV)', vmin=0.35, vmax=0.45)
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 a.set_title('CPD On Time', fontsize=12)
 
@@ -1748,21 +1749,22 @@ time = np.linspace(0.0, pxl_time, CPD.shape[1])
 
 plt.rcParams['animation.ffmpeg_path'] = r'C:\Users\Raj\Downloads\ffmpeg-20180124-1948b76-win64-static\bin\ffmpeg.exe'
     
-fig = plt.figure(figsize=(10,8))
+fig = plt.figure(figsize=(8,3))
 
 ims = []
 for k in np.arange(time.shape[0]):
     a = fig.add_subplot(111)
     CPD_rs = np.reshape(CPD[:, int(k)], [64, 128])
-    im = a.imshow(CPD_rs, cmap='inferno', vmin=mn, vmax=mx, animated=True, aspect=aspect, origin='lower')
-    a.set_axis_off()
+    im = a.imshow(CPD_rs, cmap='inferno', vmin=mn, vmax=mx, animated=True, 
+                  aspect=aspect, origin='lower', extent=[0, img_length*1e6, 0, img_height*1e6])
+
     htitle = 'At '+ '{0:.2f}'.format(k*dtCPD/1e-3)+ ' ms'
-    tl = a.text(55,-5, htitle)
+    tl = a.text((img_length*1e6 - 6)/2,(img_height)*1e6 + 1, htitle)
     ims.append([im, tl])
 
     #plt.title(, fontsize=12)
     
-ani = animation.ArtistAnimation(fig, ims, interval=150, blit=False,
+ani = animation.ArtistAnimation(fig, ims, interval=60, blit=False,
                                 repeat_delay=10)
 #ani = animation.FuncAnimation(fig, update, frames=1, interval=150, blit=False,
 #                                repeat_delay=1000)
@@ -1771,44 +1773,68 @@ ani.save(output_filepath+'\CPD.mp4')
 #%% Cross-sectional animation
 
 # note shape of CPD is 64x128, not 128x64
-cpts = [31, 62] #column points, row points
-rpts = [44, 44]
+cpts = [21, 62] #column points, row points
+rpts = [42, 42]
+linecoords = np.arange(rpts[0]*num_cols + cpts[0], rpts[0]*num_cols + cpts[1])
 
 clen = cpts[1] - cpts[0]
 rlen = rpts[1] - rpts[0]
-pxl_size = img_length/num_cols
-pxl_ht = img_height/num_rows
+pxl_size = img_length/num_cols #meter length of a pixel
+pxl_ht = img_height/num_rows #meter height of a pixel
+dtCPD = pxl_time/CPD.shape[1] #dt for the CPD since not same length as raw data
+p_on = int(light_on_time[0]*1e-3 / dtCPD) 
+p_off = int(light_on_time[1]*1e-3 / dtCPD) 
 
 ccoords = np.arange(cpts[0],cpts[1])
 rcoords = np.arange(rpts[0],rpts[1])
 
-linecoords = np.arange(rpts[0]*num_cols + cpts[0], rpts[0]*num_cols + cpts[1])
-
 time = np.linspace(0.0, pxl_time, CPD.shape[1])
-xax = np.linspace(0, pxl_size*clen, clen)
+xax = ccoords*pxl_size*1e6
 
-# create indices to plot
-
-fig, a = plt.subplots(nrows=2, figsize=(13, 6))
-a[0].imshow(CPD_on_avg, cmap='inferno',aspect=aspect, origin='lower',
-            extent=[0, img_length*1e6, 0, img_height*1e6])
+fig, a = plt.subplots(nrows=3, figsize=(13, 10))
+im0 = a[0].imshow(CPD_on_avg, cmap='inferno', origin='lower',
+                    extent=[0, img_length*1e6, 0, img_height*1e6])
 a[0].plot(ccoords*pxl_size*1e6, rpts[0]*pxl_ht*1e6*np.ones(len(ccoords)))
 
 ims = []
-a[1].set_xlabel('Distance (um)')
-a[1].set_ylabel('CPD (mV)')
+a[1].set_ylabel('Normalized CPD (mV)')
+
+a[2].set_xlabel('Distance (um)')
+a[2].set_ylabel('CPD (mV)')
+
+txtcoord = np.max(CPD[linecoords,0])*1e3
+
+#colorscale
+CPD_mn = np.reshape(CPD[:, p_on+int((p_off-p_on)/2)], [64, 128])
+mn = np.mean(CPD_mn) - 3*np.std(CPD_mn)
+CPD_mx = np.reshape(CPD[:, p_off+int((CPD.shape[1]-p_off)/2)], [64, 128])
+mx = np.mean(CPD_mx) + 3*np.std(CPD_mx)
 
 for k in np.arange(time.shape[0]):
     
+    CPD_rs = np.reshape(CPD[:, int(k)], [64, 128])
+    im0 = a[0].imshow(CPD_rs, cmap='inferno', origin='lower',
+                    extent=[0, img_length*1e6, 0, img_height*1e6], vmin=mn, vmax=mx)
+    a[0].plot(ccoords*pxl_size*1e6, rpts[0]*pxl_ht*1e6*np.ones(len(ccoords)))
+    
+    if k in np.arange(p_on,p_off):
+        tl0 = a[0].text(img_length/2*1e6 - 1, img_height*1e6+0.1, 'LIGHT ON', color='blue', weight='bold')
+    else:
+        tl0 = a[0].text(img_length/2*1e6 - 1, img_height*1e6+0.1, 'LIGHT OFF', color='black', weight='regular')
     sectn = CPD[linecoords,k]
-    im, = a[1].plot(xax*1e6,sectn*1e3, 'r^-')   #comma unpacks into a list to add titles
+    im1, = a[1].plot(xax, (sectn-np.min(sectn))/(np.max(sectn)-np.min(sectn)), 'r^-')   #comma unpacks into a list to add titles
     htitle = 'At '+ '{0:.2f}'.format(k*dtCPD/1e-3)+ ' ms'
-    tl = a[1].text(3.5, -25, htitle)
-    ims.append([im, tl])
+    tl1 = a[1].text(xax[int(xax.shape[0]/2)], 1.05, htitle)
+    
+    im2, = a[2].plot(xax, sectn*1e3, 'bo-')   #comma unpacks into a list to add titles
+    htitle = 'At '+ '{0:.2f}'.format(k*dtCPD/1e-3)+ ' ms'
+    #tl2 = a[2].text(xax[int(xax.shape[0]/2)], txtcoord+5, htitle)
+    ims.append([im0, tl0, im1, tl1, im2])
 
-ani = animation.ArtistAnimation(fig, ims, interval=150,repeat_delay=10)
+ani = animation.ArtistAnimation(fig, ims, interval=60,repeat_delay=10)
 
-ani.save(output_filepath+'\CPD_graph.mp4')
+ani.save(output_filepath+'\CPD_graph_norm.mp4')
+
 
     #%% 
 hdf.close()
