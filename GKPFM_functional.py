@@ -462,6 +462,10 @@ else:
     
 folder_path, _ = os.path.split(input_file_path)
 
+# To avoid accidental overwrites
+if folder_path.replace('/','\\') != output_filepath:
+    raise(FileExistsError)
+
 if input_file_path.endswith('.dat'):
     file = Path(input_file_path[:-15]+'.h5')
     if file.is_file():
@@ -541,6 +545,18 @@ t_vec_pix = 1E3*np.linspace(0, pnts_per_pix/samp_rate, pnts_per_pix)
 
 #%% Load previous data
 
+def h5_list(h5file, key):
+    '''
+    Returns list of names matching a key in the h5 group passed
+    h5file = hdf.file['/Measurement_000/Channel_000'] or similar
+    '''
+    names = []
+    for i in h5file:
+        if key in i:
+            names.append(i)
+            
+    return names
+
 if preLoaded == True:
     ''' 
     Loads all the previous missing data so we can skip around to relevant functions
@@ -558,32 +574,48 @@ if preLoaded == True:
     h5_resh = px.hdf_utils.getDataSet(hdf.file['/'.join([h5_filt.parent.name, nm_filt_resh])],
                                       'Reshaped_Data')[0]
     h5_resh_grp = h5_resh.parent
-
-    # Filtered Data    
-    PCA_clean_data_prerecon = px.hdf_utils.getDataSet(hdf.file['/'.join([h5_resh_grp.name, nm_SVD])],
-                                                  'Rebuilt_Data')
-    if PCA_clean_data_prerecon == []:
-        PCA_pre_reconstruction_clean = False
-    else:
-        PCA_pre_reconstruction_clean = True
-        PCA_clean_data_prerecon = PCA_clean_data_prerecon[-1]
+  
+    # Gets the "last" Rebuilt SVD Data if there's more than 1
+    names = h5_list(hdf.file['/'.join([h5_filt.parent.name,nm_filt_resh])],
+                    'Reshaped_Data-SVD')
+    if any(names):
+        nm_filt_resh_SVD = names[-1]
+        
+        # Filtered Data    
+        PCA_clean_data_prerecon = px.hdf_utils.getDataSet(hdf.file['/'.join([h5_resh_grp.name, nm_filt_resh_SVD])],'Rebuilt_Data')
+        PCA_clean_data_prerecon = PCA_clean_data_prerecon[0]
         h5_svd_group = PCA_clean_data_prerecon.parent.parent
-        h5_U = h5_svd_group['U']
-        h5_V = h5_svd_group['V']
-        h5_S = h5_svd_group['S']
+        h5_Uprerecon = h5_svd_group['U']
+        h5_Vprerecon = h5_svd_group['V']
+        h5_Sprerecon = h5_svd_group['S']
+    
+        abun_maps_prefilter = np.reshape(h5_Uprerecon[:,:25], (num_rows, num_cols,-1))
+
+    else:
+        PCA_pre_reconstruction_clean = False
     
     # Post-F3R
     h5_F3R = px.hdf_utils.getDataSet(grp, 'h5_F3R')[0]
     h5_F3Rresh_grp = h5_F3R.parent
-    h5_F3Rresh = px.hdf_utils.getDataSet(hdf.file['/'.join([h5_F3R.parent.name, nm_h5_resh])], 
-                                                  'Reshaped_Data')[0]
+    
+    # Get correct reshaped data
+    names = h5_list(hdf.file[h5_F3R.parent.name],'h5_F3R-Reshape')
+    nm_h5_resh = names[-1]
+    h5_F3Rresh = px.hdf_utils.getDataSet(hdf.file['/'.join([h5_F3R.parent.name, nm_h5_resh])],'Reshaped_Data')[0]
     PCA_clean_data_postrecon = px.hdf_utils.getDataSet(hdf.file['/'.join([h5_F3Rresh.parent.name, nm_SVD])],
                                                   'Rebuilt_Data')
     if PCA_clean_data_postrecon == []:
         PCA_post_reconstruction_clean = False
     else:
         PCA_post_reconstruction_clean = True
-        PCA_clean_data_postrecon = PCA_clean_data_postrecon[-1]
+        PCA_clean_data_postrecon = PCA_clean_data_postrecon[0]
+        
+        h5_svd_group = PCA_clean_data_postrecon.parent.parent
+        h5_U = h5_svd_group['U']
+        h5_V = h5_svd_group['V']
+        h5_S = h5_svd_group['S']
+    
+        abun_maps_postfilter = np.reshape(h5_U[:,:25], (num_rows, num_cols,-1))
     
     # CPD
     CPD = px.hdf_utils.getDataSet(grp, 'CPD')[0]
@@ -956,7 +988,7 @@ h5_V = h5_svd_group['V']
 h5_S = h5_svd_group['S']
 
 # Since the two spatial dimensions (x, y) have been collapsed to one, we need to reshape the abundance maps:
-abun_maps = np.reshape(h5_U[:,:25], (num_rows, num_cols,-1))
+abun_maps_postfilter = np.reshape(h5_U[:,:25], (num_rows, num_cols,-1))
 
 #%% Visualize the variance / statistical importance of each component:
 fig, axes =px.plot_utils.plot_scree(h5_S, title='Skree plot')
@@ -997,7 +1029,7 @@ if save_figure == True:
         fig.savefig(output_filepath+'\PCF3R_Eig_withPrePCA.tif', format='tiff')
 
 # Visualize the abundance maps:
-fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=25, heading='SVD Abundance Maps',
+fig, axes =px.plot_utils.plot_map_stack(abun_maps_postfilter, num_comps=25, heading='SVD Abundance Maps',
                              color_bar_mode='single', cmap='inferno')
 if save_figure == True:
     if PCA_pre_reconstruction_clean == False:
@@ -1012,7 +1044,7 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0, 1, 2, 4, 6]) ##Components you want to keep
+    clean_components = np.array([0, 1, 2,4,6]) ##Components you want to keep
     #num_components = len(clean_components)
 
     #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
@@ -1524,7 +1556,7 @@ if save_figure == True:
 fig, a = plt.subplots(nrows=1, figsize=(13, 3))
 _, cbar = px.plot_utils.plot_map(a, CPD_on_time*1e3, cmap='inferno', aspect=aspect, 
                        x_size=img_length*1e6, y_size=img_height*1e6, stdevs = 2,
-                       cbar_label='CPV (mV)', vmin=0.35, vmax=0.45)
+                       cbar_label='CPV (mV)', vmin=0.25, vmax=0.45)
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 a.set_title('CPD On Time', fontsize=12)
 
@@ -1756,7 +1788,7 @@ for k in np.arange(time.shape[0]):
     a = fig.add_subplot(111)
     CPD_rs = np.reshape(CPD[:, int(k)], [64, 128])
     im = a.imshow(CPD_rs, cmap='inferno', vmin=mn, vmax=mx, animated=True, 
-                  aspect=aspect, origin='lower', extent=[0, img_length*1e6, 0, img_height*1e6])
+                  origin='lower', extent=[0, img_length*1e6, 0, img_height*1e6])
 
     htitle = 'At '+ '{0:.2f}'.format(k*dtCPD/1e-3)+ ' ms'
     tl = a.text((img_length*1e6 - 6)/2,(img_height)*1e6 + 1, htitle)
@@ -1773,8 +1805,8 @@ ani.save(output_filepath+'\CPD.mp4')
 #%% Cross-sectional animation
 
 # note shape of CPD is 64x128, not 128x64
-cpts = [21, 62] #column points, row points
-rpts = [42, 42]
+cpts = [69, 76] #column points, row points
+rpts = [4, 4]
 linecoords = np.arange(rpts[0]*num_cols + cpts[0], rpts[0]*num_cols + cpts[1])
 
 clen = cpts[1] - cpts[0]
@@ -1833,7 +1865,7 @@ for k in np.arange(time.shape[0]):
 
 ani = animation.ArtistAnimation(fig, ims, interval=60,repeat_delay=10)
 
-ani.save(output_filepath+'\CPD_graph_norm.mp4')
+ani.save(output_filepath+'\CPD_graph_norm4.mp4')
 
 
     #%% 
