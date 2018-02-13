@@ -94,7 +94,7 @@ button_layout=dict(
 
 import os
 
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_700mA__0011'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_4ms_700mA__0007'
 save_figure = True
 
 output_filepath = os.path.expanduser(output_filepath)
@@ -444,7 +444,7 @@ hdf.close()
 from pathlib import Path
 
 # Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_500us_green700mA__0006'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_4ms_700mA__0007'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
 
@@ -625,6 +625,9 @@ if preLoaded == True:
     CPD = px.hdf_utils.getDataSet(grp, 'CPD')[0]
     CPD_on_time = px.hdf_utils.getDataSet(grp, 'CPD_on_time')[0]
     CPD_off_time = px.hdf_utils.getDataSet(grp, 'CPD_off_time')[0]
+    if type(CPD_on_time != np.ndarray):
+        CPD_on_time = CPD_on_time.value
+        CPD_off_time = CPD_off_time.value
     
     CPD_off_avg = np.zeros(CPD_on_time.shape)
     CPD_on_avg = np.zeros(CPD_on_time.shape)
@@ -863,7 +866,7 @@ PCA_pre_reconstruction_clean = True
 if PCA_pre_reconstruction_clean == True:
     
     # important! If choosing components, min is 3 or interprets as start/stop range of slice
-    clean_components = np.array([0,1,2,3,4,5]) # np.append(range(5,9),(17,18))
+    clean_components = np.array([0,1,4]) # np.append(range(5,9),(17,18))
 
     # checks for existing SVD
     itms = [i for i in h5_resh.parent.items()]
@@ -874,13 +877,16 @@ if PCA_pre_reconstruction_clean == True:
     
     SVD_exists = False
     for i in svdnames:
-        rb = px.hdf_utils.getDataSet(hdf.file[i.name], 'Rebuilt_Data')[0]
-        if np.array_equal(rb.parent.attrs['components_used'], clean_components):
-            print(i.name,'has same components')
-            SVD_exists = True
-            test = rb
+        print(i.name.split('/')[-1])
+        if px.hdf_utils.getDataSet(hdf.file[i.name], 'Rebuilt_Data') != []:
+            rb = px.hdf_utils.getDataSet(hdf.file[i.name], 'Rebuilt_Data')[0]
+            if np.array_equal(rb.parent.attrs['components_used'], clean_components):
+                print(i.name.split('/')[-1],'has same components')
+                SVD_exists = True
+                test = rb
     
     if SVD_exists == False:
+        print('#### Doing SVD ####')
         test = px.svd_utils.rebuild_svd(h5_resh, components=clean_components)
     
     PCA_clean_data_prerecon = test[:,:].reshape(num_rows,-1)
@@ -1069,7 +1075,7 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,1,2,3,4]) ##Components you want to keep
+    clean_components = np.array([0, 3]) ##Components you want to keep
     #num_components = len(clean_components)
     
     # checks for existing SVD
@@ -1157,6 +1163,7 @@ test_wH = np.zeros((pnts_per_CPDpix, deg+1))
 rows = [4*num_cols+14, 44*num_cols+16, 32*num_cols+67]  
 fig,a = plt.subplots(nrows=1, figsize=(8,6))
 a.set_xlabel('Time (s)')
+
 a.set_ylabel('CPD (V)')
 a.set_title('Random CPD pixels')
 
@@ -1587,23 +1594,23 @@ a.set_title('CPD Off Time', fontsize=12)
 
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
-        fig.savefig(output_filepath+'\CPDoff_times_noPCA-Alone.tif', format='tiff')
+        fig.savefig(output_filepath+'\CPDoff_times_PCA-Alone.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\CPDoff_times_PCA-Alone.tif', format='tiff')    
+        fig.savefig(output_filepath+'\CPDoff_times_noPCA-Alone.tif', format='tiff')    
 
        
 fig, a = plt.subplots(nrows=1, figsize=(13, 3))
 _, cbar = px.plot_utils.plot_map(a, CPD_on_time*1e3, cmap='inferno', aspect=aspect, 
                        x_size=img_length*1e6, y_size=img_height*1e6, stdevs = 2,
-                       cbar_label='Time Constant (ms)', vmin=0.3, vmax=1)
+                       cbar_label='Time Constant (ms)')
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 a.set_title('CPD On Time', fontsize=12)
 
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
-        fig.savefig(output_filepath+'\CPDon_times_noPCA-Alone.tif', format='tiff')
+        fig.savefig(output_filepath+'\CPDon_times_PCA-Alone.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\CPDon_times_PCA-Alone.tif', format='tiff')    
+        fig.savefig(output_filepath+'\CPDon_times_noPCA-Alone.tif', format='tiff')    
         
 #%%
 # SPV plotting
@@ -1624,22 +1631,60 @@ if save_figure == True:
         fig.savefig(output_filepath+'\SPV_noPCApost.eps', format='eps')
         fig.savefig(output_filepath+'\SPV_noPCApost.tif', format='tiff')
 
+
 #%% CPD vs time
 
-indices = {106:47,
-           76:49,
-           75:38,
-           50:29,
-           13:48
-          }
+# points for CPD slices
+#indices = {106:47,
+#           76:49,
+#           75:38,
+#           50:29,
+#           13:48
+#          }
+indices = {.1:1,
+           4:1,
+           4.2:6,
+           7.8:.9,
+           12:3,
+           17.2:4.7,
+           24:7,
+           30:3
+           }
 
-plt.figure()
-for col in indices:
-    row = indices[col]
-    plt.plot(CPD[row*num_cols + col,:-1])
-    print(CPD_off_time[row, col], ' s CPD off time at ', row, ' ', col)
-    print(CPD_on_time[row, col], ' s CPD on time at ', row, ' ', col)
+cptslabels = [k for k in indices] #column points, row points
+rptslabels = [k for k in indices.values()]
+cpts = [int(i) for i in np.round(np.array(cptslabels) * (1e-6/ img_length) * num_cols)]
+rpts = [int(i) for i in np.round(np.array(rptslabels) * (1e-6/ img_height) * num_rows)]
 
+#cpts = [69, 76] #column points, row points
+#rpts = [4, 4]
+linecoords = np.arange(rpts[0]*num_cols + cpts[0], rpts[0]*num_cols + cpts[1])
+
+fig, a = plt.subplots(nrows=2, figsize=(13, 10), facecolor='white')
+im0 = px.plot_utils.plot_map(a[0], CPD_on_avg*1e3, cmap='inferno', origin='lower', aspect=0.5,
+                             x_size=img_length*1e6, y_size= img_height*1e6, num_ticks=9,
+                             cbar_label='CPV (mV)')
+
+time = np.linspace(0.0, pxl_time, CPD.shape[1])
+dtCPD = pxl_time/CPD.shape[1] #dt for the CPD since not same length as raw data
+
+colors = ['C'+str(i) for i in np.arange(0,len(cpts))]
+markers =  ['C'+str(i)+'s' for i in np.arange(0,len(cpts))]
+
+for k,j,m,c in zip(cpts, rpts, markers, colors):
+    a[0].plot(k, j, m, markersize=10, mec='white', mew=1)
+    a[1].plot(time, CPD[j*num_cols + k,:], c)
+    a[1].set_xlabel('Time (s)')
+    a[1].set_ylabel('CPD (V)')
+    print(CPD_off_time[j, k], ' s CPD off time at ', j, ' ', k)
+    print(CPD_on_time[j, k], ' s CPD on time at ', j, ' ', k)
+    
+if save_figure == True:
+    if PCA_post_reconstruction_clean == True:
+        fig.savefig(output_filepath+'\CPD_slices_PCApost.tif', format='tiff')
+    else:
+        fig.savefig(output_filepath+'\CPD_slices_noPCApost.tif', format='tiff')
+    
 #%% Apply grain mask as needed
 
 from pixelCPD import averagemask
@@ -1846,8 +1891,8 @@ ani.save(output_filepath+'\CPD.mp4')
 # note shape of CPD is 64x128, not 128x64
 
 #in length units, in microns here
-cptslabels = [11, 21] #column points, row points
-rptslabels = [2, 2]
+cptslabels = [.1, 10] #column points, row points
+rptslabels = [6, 6]
 
 cpts = [int(i) for i in np.array(cptslabels) * (1e-6/ img_length) * num_cols]
 rpts = [int(i) for i in np.array(rptslabels) * (1e-6/ img_height) * num_rows]
@@ -1894,7 +1939,6 @@ markers = ['^-','o-','s-','D-', 'v-']
 labels = ['{0:.2f}'.format(i*dtCPD/1e-3)+ ' ms' for i in displays]
 
 for k in range(len(displays)):
-    print(k)
     CPD_rs = np.reshape(CPD[:, displays[k]], [64, 128])
     sectn = CPD[linecoords,displays[k]]
     a[1].plot(xax, (sectn-np.min(sectn))/(np.max(sectn)-np.min(sectn)), markers[k], label=labels[k]) 
@@ -1902,7 +1946,6 @@ for k in range(len(displays)):
 a[1].legend(fontsize='12')
 
 length_labels = str(cptslabels[0])+'-'+str(cptslabels[1])+'um_at_'+str(rptslabels[0])+'_um'
-fig.savefig(output_filepath+'\CPD_composite_'+length_labels+'.png', format='png')
 fig.savefig(output_filepath+'\CPD_composite_'+length_labels+'.tif', format='tif')
 
 #%% Animate
