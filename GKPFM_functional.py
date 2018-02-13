@@ -444,12 +444,12 @@ hdf.close()
 from pathlib import Path
 
 # Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_10mA__0014'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_500us_green700mA__0006'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
 
-img_length = 34e-6
-img_height = 8.5e-6
+img_length = 32e-6
+img_height = 8.0e-6
 aspect = 0.5 # due to G-mode approach
 
 pre_load_files = False
@@ -583,13 +583,17 @@ if preLoaded == True:
         
         # Filtered Data    
         PCA_clean_data_prerecon = px.hdf_utils.getDataSet(hdf.file['/'.join([h5_resh_grp.name, nm_filt_resh_SVD])],'Rebuilt_Data')
-        PCA_clean_data_prerecon = PCA_clean_data_prerecon[0]
-        h5_svd_group = PCA_clean_data_prerecon.parent.parent
-        h5_Uprerecon = h5_svd_group['U']
-        h5_Vprerecon = h5_svd_group['V']
-        h5_Sprerecon = h5_svd_group['S']
-    
-        abun_maps_prefilter = np.reshape(h5_Uprerecon[:,:25], (num_rows, num_cols,-1))
+        
+        if PCA_clean_data_prerecon == []:
+            PCA_pre_reconstruction_clean = False
+        else:
+            PCA_clean_data_prerecon = PCA_clean_data_prerecon[0]
+            h5_svd_group = PCA_clean_data_prerecon.parent.parent
+            h5_Uprerecon = h5_svd_group['U']
+            h5_Vprerecon = h5_svd_group['V']
+            h5_Sprerecon = h5_svd_group['S']
+        
+            abun_maps_prefilter = np.reshape(h5_Uprerecon[:,:25], (num_rows, num_cols,-1))
 
     else:
         PCA_pre_reconstruction_clean = False
@@ -859,12 +863,27 @@ PCA_pre_reconstruction_clean = True
 if PCA_pre_reconstruction_clean == True:
     
     # important! If choosing components, min is 3 or interprets as start/stop range of slice
-    clean_components = np.array([0,1,2,4,5]) # np.append(range(5,9),(17,18))
-    
-    test = px.svd_utils.rebuild_svd(h5_resh, 
-                                    components=clean_components)
-    PCA_clean_data_prerecon = test[:,:].reshape(num_rows,-1)
+    clean_components = np.array([0,1,2,3,4,5]) # np.append(range(5,9),(17,18))
 
+    # checks for existing SVD
+    itms = [i for i in h5_resh.parent.items()]
+    svdnames = []
+    for i in itms:
+        if 'Reshaped_Data-SVD' in i[0]:
+            svdnames.append(i[1])
+    
+    SVD_exists = False
+    for i in svdnames:
+        rb = px.hdf_utils.getDataSet(hdf.file[i.name], 'Rebuilt_Data')[0]
+        if np.array_equal(rb.parent.attrs['components_used'], clean_components):
+            print(i.name,'has same components')
+            SVD_exists = True
+            test = rb
+    
+    if SVD_exists == False:
+        test = px.svd_utils.rebuild_svd(h5_resh, components=clean_components)
+    
+    PCA_clean_data_prerecon = test[:,:].reshape(num_rows,-1)
 
 #%% Step 3) Fast Free Force Reconstruction
 '''
@@ -969,6 +988,12 @@ scan_width = 1
 h5_F3Rresh = px.processing.gmode_utils.reshape_from_lines_to_pixels(h5_F3R, pixel_ex_wfm.size, scan_width / num_cols)
 h5_F3Rresh_grp = h5_F3Rresh.parent
 
+# Saves whether it was PCA cleaned before or not
+if PCA_pre_reconstruction_clean == True:
+    h5_F3Rresh_grp.attrs['pre_PCA'] = clean_components
+else:
+    h5_F3Rresh_grp.attrs['pre_PCA'] = -1
+
 print('Data was reshaped from shape', h5_F3R.shape,
       'reshaped to ', h5_F3Rresh.shape)
 
@@ -1044,12 +1069,26 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0, 1, 2,4,6]) ##Components you want to keep
+    clean_components = np.array([0,1,2,3,4]) ##Components you want to keep
     #num_components = len(clean_components)
-
-    #test = px.svd_utils.rebuild_svd(h5_F3rresh, components=num_components)
-    test = px.svd_utils.rebuild_svd(h5_F3Rresh, 
-                                    components=clean_components)
+    
+    # checks for existing SVD
+    rebuilt_grp = h5_F3Rresh.parent.name + '/Reshaped_Data-SVD_000'
+    names = h5_list(hdf.file[rebuilt_grp],'Rebuilt_Data')
+    
+    # Checks if SVD has been done somewhere with these components already to save time
+    SVD_exists = False
+    for i in names:
+        rb = hdf.file[rebuilt_grp+'/'+i]
+        print(i,rb.attrs['components_used'])
+        if np.array_equal(rb.attrs['components_used'],clean_components):
+            print(i,'has same components')
+            SVD_exists = True
+            test = rb['Rebuilt_Data']
+            
+    if SVD_exists == False:
+        test = px.svd_utils.rebuild_svd(h5_F3Rresh, components=clean_components)
+        
     PCA_clean_data_postrecon = test[:,:].reshape(num_rows*num_cols,-1)
 
 #%% Fit function for CPD
@@ -1327,7 +1366,7 @@ p0off = [.025, 1e-3, 0, time_off[0]]
 #%% Slice of one CPD set
 
 # random pixel
-r = 32
+r = 12
 c = 40
 
 test = CPD[r*num_cols+c,:]
@@ -1542,7 +1581,7 @@ if save_figure == True:
 fig, a = plt.subplots(nrows=1, figsize=(13, 3))
 _, cbar = px.plot_utils.plot_map(a, CPD_off_time*1e3, cmap='inferno', aspect=aspect, 
                        x_size=img_length*1e6, y_size=img_height*1e6, stdevs = 2,
-                       cbar_label='CPV (mV)')
+                       cbar_label='Time Constant (ms)')
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 a.set_title('CPD Off Time', fontsize=12)
 
@@ -1556,7 +1595,7 @@ if save_figure == True:
 fig, a = plt.subplots(nrows=1, figsize=(13, 3))
 _, cbar = px.plot_utils.plot_map(a, CPD_on_time*1e3, cmap='inferno', aspect=aspect, 
                        x_size=img_length*1e6, y_size=img_height*1e6, stdevs = 2,
-                       cbar_label='CPV (mV)', vmin=0.25, vmax=0.45)
+                       cbar_label='Time Constant (ms)', vmin=0.3, vmax=1)
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 a.set_title('CPD On Time', fontsize=12)
 
@@ -1605,33 +1644,33 @@ for col in indices:
 
 from pixelCPD import averagemask
 
-mask = np.fliplr(np.transpose(np.loadtxt('E:/ORNL/20191221_BAPI/BAPI6-9 Text/BAPI20_grain_mask.txt')))
-CPD_GB_avg = averagemask(CPD, mask)
-CPD_GC_avg = averagemask(CPD, mask, avg_flag = 1)
-mask[mask==1] = np.nan
-
-fig, a = plt.subplots()
-a.set_title('CPD On Time', fontsize=12)
-plt.plot( CPD_GB_avg ,'k', label='GB')
-plt.plot( CPD_GC_avg, 'r', label='GC')
-a.legend(fontsize=14)
-if save_figure == True:
-    fig.savefig(output_filepath+'\CPD_GBavg.eps', format='eps')
-    fig.savefig(output_filepath+'\CPD_GBavg.tif', format='tiff')
-
-fig, a = plt.subplots()
-a.set_title('CPD On Time', fontsize=12)
-plt.plot( CPD_GB_avg-CPD_GB_avg[0] ,'k', label='GB')
-plt.plot( CPD_GC_avg-CPD_GC_avg[0], 'r', label='GC')
-a.legend(fontsize=14)
-if save_figure == True:
-    fig.savefig(output_filepath+'\CPD_GBavg_norm.tif', format='tiff')
-
-fig = plt.figure()
-a = fig.add_subplot(111)
-a.imshow(CPD_on_avg, cmap='inferno')
-a.imshow(mask)
-a.set_title('CPD with Mask')
+#mask = np.fliplr(np.transpose(np.loadtxt('E:/ORNL/20191221_BAPI/BAPI6-9 Text/BAPI20_grain_mask.txt')))
+#CPD_GB_avg = averagemask(CPD, mask)
+#CPD_GC_avg = averagemask(CPD, mask, avg_flag = 1)
+#mask[mask==1] = np.nan
+#
+#fig, a = plt.subplots()
+#a.set_title('CPD On Time', fontsize=12)
+#plt.plot( CPD_GB_avg ,'k', label='GB')
+#plt.plot( CPD_GC_avg, 'r', label='GC')
+#a.legend(fontsize=14)
+#if save_figure == True:
+#    fig.savefig(output_filepath+'\CPD_GBavg.eps', format='eps')
+#    fig.savefig(output_filepath+'\CPD_GBavg.tif', format='tiff')
+#
+#fig, a = plt.subplots()
+#a.set_title('CPD On Time', fontsize=12)
+#plt.plot( CPD_GB_avg-CPD_GB_avg[0] ,'k', label='GB')
+#plt.plot( CPD_GC_avg-CPD_GC_avg[0], 'r', label='GC')
+#a.legend(fontsize=14)
+#if save_figure == True:
+#    fig.savefig(output_filepath+'\CPD_GBavg_norm.tif', format='tiff')
+#
+#fig = plt.figure()
+#a = fig.add_subplot(111)
+#a.imshow(CPD_on_avg, cmap='inferno')
+#a.imshow(mask)
+#a.set_title('CPD with Mask')
 
 #%% Data Visualization of separate CPDs
     
@@ -1802,11 +1841,19 @@ ani = animation.ArtistAnimation(fig, ims, interval=60, blit=False,
 #                                repeat_delay=1000)
 ani.save(output_filepath+'\CPD.mp4')
 
-#%% Cross-sectional animation
+#%% Cross-sectional animation, setup
 
 # note shape of CPD is 64x128, not 128x64
-cpts = [69, 76] #column points, row points
-rpts = [4, 4]
+
+#in length units, in microns here
+cptslabels = [11, 21] #column points, row points
+rptslabels = [2, 2]
+
+cpts = [int(i) for i in np.array(cptslabels) * (1e-6/ img_length) * num_cols]
+rpts = [int(i) for i in np.array(rptslabels) * (1e-6/ img_height) * num_rows]
+
+#cpts = [69, 76] #column points, row points
+#rpts = [4, 4]
 linecoords = np.arange(rpts[0]*num_cols + cpts[0], rpts[0]*num_cols + cpts[1])
 
 clen = cpts[1] - cpts[0]
@@ -1823,10 +1870,10 @@ rcoords = np.arange(rpts[0],rpts[1])
 time = np.linspace(0.0, pxl_time, CPD.shape[1])
 xax = ccoords*pxl_size*1e6
 
-fig, a = plt.subplots(nrows=3, figsize=(13, 10))
+fig, a = plt.subplots(nrows=3, figsize=(13, 10), facecolor='white')
 im0 = a[0].imshow(CPD_on_avg, cmap='inferno', origin='lower',
                     extent=[0, img_length*1e6, 0, img_height*1e6])
-a[0].plot(ccoords*pxl_size*1e6, rpts[0]*pxl_ht*1e6*np.ones(len(ccoords)))
+a[0].plot(ccoords*pxl_size*1e6, rpts[0]*pxl_ht*1e6*np.ones(len(ccoords)), 'w')
 
 ims = []
 a[1].set_ylabel('Normalized CPD (mV)')
@@ -1841,6 +1888,37 @@ CPD_mn = np.reshape(CPD[:, p_on+int((p_off-p_on)/2)], [64, 128])
 mn = np.mean(CPD_mn) - 3*np.std(CPD_mn)
 CPD_mx = np.reshape(CPD[:, p_off+int((CPD.shape[1]-p_off)/2)], [64, 128])
 mx = np.mean(CPD_mx) + 3*np.std(CPD_mx)
+
+displays = np.array([1, p_on, int(p_on+(p_off-p_on)/2), p_off, pnts_per_CPDpix-1])
+markers = ['^-','o-','s-','D-', 'v-']
+labels = ['{0:.2f}'.format(i*dtCPD/1e-3)+ ' ms' for i in displays]
+
+for k in range(len(displays)):
+    print(k)
+    CPD_rs = np.reshape(CPD[:, displays[k]], [64, 128])
+    sectn = CPD[linecoords,displays[k]]
+    a[1].plot(xax, (sectn-np.min(sectn))/(np.max(sectn)-np.min(sectn)), markers[k], label=labels[k]) 
+    a[2].plot(xax, sectn*1e3, markers[k], markersize=8, label=labels[k]) 
+a[1].legend(fontsize='12')
+
+length_labels = str(cptslabels[0])+'-'+str(cptslabels[1])+'um_at_'+str(rptslabels[0])+'_um'
+fig.savefig(output_filepath+'\CPD_composite_'+length_labels+'.png', format='png')
+fig.savefig(output_filepath+'\CPD_composite_'+length_labels+'.tif', format='tif')
+
+#%% Animate
+
+fig, a = plt.subplots(nrows=3, figsize=(13, 10), facecolor='white')
+im0 = a[0].imshow(CPD_on_avg, cmap='inferno', origin='lower',
+                    extent=[0, img_length*1e6, 0, img_height*1e6])
+a[0].plot(ccoords*pxl_size*1e6, rpts[0]*pxl_ht*1e6*np.ones(len(ccoords)), 'w')
+
+ims = []
+a[1].set_ylabel('Normalized CPD (mV)')
+
+a[2].set_xlabel('Distance (um)')
+a[2].set_ylabel('CPD (mV)')
+
+txtcoord = np.max(CPD[linecoords,0])*1e3
 
 for k in np.arange(time.shape[0]):
     
@@ -1865,7 +1943,7 @@ for k in np.arange(time.shape[0]):
 
 ani = animation.ArtistAnimation(fig, ims, interval=60,repeat_delay=10)
 
-ani.save(output_filepath+'\CPD_graph_norm4.mp4')
+ani.save(output_filepath+'\CPD_graph_'+length_labels+'.mp4')
 
 
     #%% 
