@@ -652,7 +652,17 @@ if preLoaded == True:
     
     
     # Parabola fit
-    wHfit3 = px.hdf_utils.getDataSet(hdf.file['/'],'parafit_main')
+    wHfit3 = px.hdf_utils.getDataSet(hdf.file['/'],'parafit_main')[0]
+    reconstruct = False
+
+    CPD_recon = np.zeros([num_rows*num_cols, wHfit3.shape[1]])
+    CPD_grad_recon = np.zeros([num_rows*num_cols, wHfit3.shape[1]])
+        
+    CPD_recon[:,:] = -0.5*np.divide(wHfit3[:,:,1],wHfit3[:,:,2]) # vertex of parabola
+    CPD_grad_recon[:,:] = wHfit3[:,:,2]
+    
+    dset = wHfit3[:,:,:]
+
     
 #%% Step 2B) Fourier Filter data
 '''
