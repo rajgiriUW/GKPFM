@@ -3,9 +3,9 @@
 # G-MODE KPFM with Fast Free Force Recovery (F3R)
 ### Oak Ridge National Laboratory
 ### *Liam Collins, Anugrah Saxena, Rama Vasudevan and Chris Smith*
-### *Edits Raj Giridharagopal, University of Washington*
+### *Major Edits Raj Giridharagopal, University of Washington*
 
-This notebook will allow  fast KPFM by recovery of the electrostatic foce directly from the photodetector response. Information on the procedure can be found in Collins et al. ([DOI: 10.1021/acsnano.7b02114](http://pubs.acs.org/doi/abs/10.1021/acsnano.7b02114)) In this notebook the following procedured are performed. <br>
+This notebook will allow fast KPFM by recovery of the electrostatic foce directly from the photodetector response. Information on the procedure can be found in Collins et al. ([DOI: 10.1021/acsnano.7b02114](http://pubs.acs.org/doi/abs/10.1021/acsnano.7b02114)) In this notebook the following procedured are performed. <br>
 
 #### (1) Models the Cantilever Transfer Function (H(w))
 **(1a)** Translates Tune file to H5 <br>
@@ -94,7 +94,7 @@ button_layout=dict(
 
 import os
 
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_4ms_700mA__0007'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_TUNE__0009'
 save_figure = True
 
 output_filepath = os.path.expanduser(output_filepath)
@@ -138,6 +138,11 @@ cantl_parms['invols'] = 82.76e-9 # m/V
 cantl_parms['Thermal_Q'] = 80
 cantl_parms['Thermal_res'] = 57076 #Hz
 
+#MAPI data
+cantl_parms['k'] = 2.3 # N/M
+cantl_parms['invols'] = 67.56e-9 # m/V
+cantl_parms['Thermal_Q'] = 83.6
+cantl_parms['Thermal_res'] = 57061 #Hz
 #%% Step 1) Model the Cantilever Transfer Function
 
 '''
@@ -163,7 +168,7 @@ if pre_load_files is False:
                                             Translated file (*.h5)')
 
     tune_path, _ = os.path.split(input_file_path)
-    tune_file_base_name=os.path.basename(tune_path)
+    tune_file_base_name = os.path.basename(tune_path)
 
 else:
     for p in tune_file:
@@ -176,7 +181,7 @@ else:
             break
         #input_file_path = tune_file
 
-if input_file_path.endswith('.dat'):
+if input_file_path.endswith('.dat') == True:
     print('Translating raw data to h5. Please wait')
     tran = px.GTuneTranslator()
     h5_path = tran.translate(input_file_path)
@@ -444,13 +449,15 @@ hdf.close()
 from pathlib import Path
 
 # Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_4ms_700mA__0007'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_6ms_green700mA__0005'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
 
 img_length = 32e-6
-img_height = 8.0e-6
+img_height = 8e-6
 aspect = 0.5 # due to G-mode approach
+
+print('#### IMAGE LENGTH =',img_length,'####')
 
 pre_load_files = False
 if pre_load_files is False:
@@ -674,8 +681,13 @@ nbf = px.processing.fft.NoiseBandFilter(num_pts, samp_rate,
 freq_filts = [lpf, nbf]
 noise_tolerance = 5e-7
 
+narrowband = False
+if narrowband == True:
+    nbf = px.processing.fft.HarmonicPassFilter(num_pts, samp_rate, ex_freq, 1e3, 5)
+    freq_filts = [nbf]
+
 # Test filter on a single line:
-row_ind = 40
+row_ind = 12
 filt_line, fig_filt, axes_filt = px.processing.gmode_utils.test_filter(h5_main[row_ind],
                                                                        frequency_filters=freq_filts,
                                                                        noise_threshold=noise_tolerance,
@@ -703,11 +715,13 @@ This segment does two things:
 # Try Force Conversion on Filtered data
 
 # Phase Offset
-ph = -0.29 + np.pi   # phase from cable delays between excitation and response
+ph = -0.3 + np.pi   # phase from cable delays between excitation and response
+
+#ph = -0.3 - np.pi
 
 # Calculates NoiseLimit
 fft_h5row = np.fft.fftshift(np.fft.fft(h5_main[row_ind]))
-noise_floor = px.processing.fft.getNoiseFloor(fft_h5row, noise_tolerance)[0]
+noise_floor = px.processing.fft.get_noise_floor(fft_h5row, noise_tolerance)[0]
 print('Noise floor = ', noise_floor)
 Noiselimit = np.ceil(noise_floor)
 
@@ -789,7 +803,7 @@ if h5_filt_grp == None:
     sig_filt = px.processing.SignalFilter(h5_main, frequency_filters=freq_filts, 
                                           noise_threshold=noise_tolerance,
                                           write_filtered=True, write_condensed=False, 
-                                          num_pix=1,verbose=True, cores=2, max_mem_mb=512)
+                                          num_pix=1,verbose=True, cores=1, max_mem_mb=512)
     h5_filt_grp = sig_filt.compute()
     
 else:
@@ -860,13 +874,13 @@ if save_figure == True:
     fig.savefig(output_filepath+r'\PCARaw_Loading.tif', format='tiff')
 
 #%% PCA_Clean prior to F3R Reconstruction?
-PCA_pre_reconstruction_clean = True
+PCA_pre_reconstruction_clean = False
 
 # Filters out the components specified from h5_resh (the reshaped h5 data)
 if PCA_pre_reconstruction_clean == True:
     
     # important! If choosing components, min is 3 or interprets as start/stop range of slice
-    clean_components = np.array([0,1,4]) # np.append(range(5,9),(17,18))
+    clean_components = np.array([0,1,2,3,4]) # np.append(range(5,9),(17,18))
 
     # checks for existing SVD
     itms = [i for i in h5_resh.parent.items()]
@@ -1072,10 +1086,10 @@ if save_figure == True:
 
 
 #%% Here you can PCA clean data if you like
-PCA_post_reconstruction_clean = True
+PCA_post_reconstruction_clean = False
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0, 3]) ##Components you want to keep
+    clean_components = np.array([0,1,4,5,6, 7, 8]) ##Components you want to keep
     #num_components = len(clean_components)
     
     # checks for existing SVD
@@ -1230,7 +1244,7 @@ else:
 
 # This is number of periods you want to average over,
 # for best time resolution =1 (but takes longer to fit)
-periods = 2
+periods = 1
 complete_periods = True
  
 num_periods_per_sample = int(np.floor(num_periods / periods))
@@ -1329,6 +1343,19 @@ except:
     
 hdf.file.flush()
 
+#%% Reconstruct CPD from parafit these data
+reconstruct = False
+
+# dset is NxP, N = num_pixels total, P= number of points per CPD trace (8192=8.192 ms)
+
+if reconstruct:
+    
+    CPD_recon = np.zeros([num_rows*num_cols, dset.shape[1]])
+    CPD_grad_recon = np.zeros([num_rows*num_cols, dset.shape[1]])
+        
+    CPD_recon[:,:] = -0.5*np.divide(dset[:,:,1],dset[:,:,2]) # vertex of parabola
+    CPD_grad_recon[:,:] = dset[:,:,2]
+
 #%% Visualize CPD vs time
 
 # Separate CPDs into "light on" and "light off" case
@@ -1373,7 +1400,7 @@ p0off = [.025, 1e-3, 0, time_off[0]]
 #%% Slice of one CPD set
 
 # random pixel
-r = 12
+r = 32
 c = 40
 
 test = CPD[r*num_cols+c,:]
@@ -1588,7 +1615,7 @@ if save_figure == True:
 fig, a = plt.subplots(nrows=1, figsize=(13, 3))
 _, cbar = px.plot_utils.plot_map(a, CPD_off_time*1e3, cmap='inferno', aspect=aspect, 
                        x_size=img_length*1e6, y_size=img_height*1e6, stdevs = 2,
-                       cbar_label='Time Constant (ms)')
+                       cbar_label='Time Constant (ms)', vmin=0.60, vmax=1.6)
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 a.set_title('CPD Off Time', fontsize=12)
 
@@ -1602,7 +1629,7 @@ if save_figure == True:
 fig, a = plt.subplots(nrows=1, figsize=(13, 3))
 _, cbar = px.plot_utils.plot_map(a, CPD_on_time*1e3, cmap='inferno', aspect=aspect, 
                        x_size=img_length*1e6, y_size=img_height*1e6, stdevs = 2,
-                       cbar_label='Time Constant (ms)')
+                       cbar_label='Time Constant (ms)', vmin=0.21, vmax=0.63)
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 a.set_title('CPD On Time', fontsize=12)
 
@@ -1642,13 +1669,18 @@ if save_figure == True:
 #           13:48
 #          }
 indices = {.1:1,
-           4:1,
+           4.1:1,
            4.2:6,
            7.8:.9,
            12:3,
            17.2:4.7,
            24:7,
            30:3
+           }
+indices = {
+           7.4:1,
+           8:1
+           
            }
 
 cptslabels = [k for k in indices] #column points, row points
@@ -1838,7 +1870,7 @@ timeslice = np.floor(np.arange(0.5, 8, .5) *1e-3/dtCPD)
 
 # find correct mn and mx for color scale
 CPD_mn = np.reshape(CPD[:, p_on+int((p_off-p_on)/2)], [64, 128])
-mn = np.mean(CPD_mn) - 3*np.std(CPD_mn)
+mn = np.mean(CPD_mn) - 2.5*np.std(CPD_mn)
 CPD_mx = np.reshape(CPD[:, p_off+int((CPD.shape[1]-p_off)/2)], [64, 128])
 mx = np.mean(CPD_mx) + 3*np.std(CPD_mx)
 
@@ -1860,39 +1892,39 @@ for k in timeslice:
 
 #%%Animate and save
 
-import matplotlib.animation as animation
-time = np.linspace(0.0, pxl_time, CPD.shape[1])
-
-plt.rcParams['animation.ffmpeg_path'] = r'C:\Users\Raj\Downloads\ffmpeg-20180124-1948b76-win64-static\bin\ffmpeg.exe'
-    
-fig = plt.figure(figsize=(8,3))
-
-ims = []
-for k in np.arange(time.shape[0]):
-    a = fig.add_subplot(111)
-    CPD_rs = np.reshape(CPD[:, int(k)], [64, 128])
-    im = a.imshow(CPD_rs, cmap='inferno', vmin=mn, vmax=mx, animated=True, 
-                  origin='lower', extent=[0, img_length*1e6, 0, img_height*1e6])
-
-    htitle = 'At '+ '{0:.2f}'.format(k*dtCPD/1e-3)+ ' ms'
-    tl = a.text((img_length*1e6 - 6)/2,(img_height)*1e6 + 1, htitle)
-    ims.append([im, tl])
-
-    #plt.title(, fontsize=12)
-    
-ani = animation.ArtistAnimation(fig, ims, interval=60, blit=False,
-                                repeat_delay=10)
-#ani = animation.FuncAnimation(fig, update, frames=1, interval=150, blit=False,
-#                                repeat_delay=1000)
-ani.save(output_filepath+'\CPD.mp4')
+#import matplotlib.animation as animation
+#time = np.linspace(0.0, pxl_time, CPD.shape[1])
+#
+#plt.rcParams['animation.ffmpeg_path'] = r'C:\Users\Raj\Downloads\ffmpeg-20180124-1948b76-win64-static\bin\ffmpeg.exe'
+#    
+#fig = plt.figure(figsize=(8,3))
+#
+#ims = []
+#for k in np.arange(time.shape[0]):
+#    a = fig.add_subplot(111)
+#    CPD_rs = np.reshape(CPD[:, int(k)], [64, 128])
+#    im = a.imshow(CPD_rs, cmap='inferno', vmin=mn, vmax=mx, animated=True, 
+#                  origin='lower', extent=[0, img_length*1e6, 0, img_height*1e6])
+#
+#    htitle = 'At '+ '{0:.2f}'.format(k*dtCPD/1e-3)+ ' ms'
+#    tl = a.text((img_length*1e6 - 6)/2,(img_height)*1e6 + 1, htitle)
+#    ims.append([im, tl])
+#
+#    #plt.title(, fontsize=12)
+#    
+#ani = animation.ArtistAnimation(fig, ims, interval=60, blit=False,
+#                                repeat_delay=10)
+##ani = animation.FuncAnimation(fig, update, frames=1, interval=150, blit=False,
+##                                repeat_delay=1000)
+#ani.save(output_filepath+'\CPD.mp4')
 
 #%% Cross-sectional animation, setup
 
 # note shape of CPD is 64x128, not 128x64
 
 #in length units, in microns here
-cptslabels = [.1, 10] #column points, row points
-rptslabels = [6, 6]
+cptslabels = [7, 12] #column points, row points
+rptslabels = [2  , 2]
 
 cpts = [int(i) for i in np.array(cptslabels) * (1e-6/ img_length) * num_cols]
 rpts = [int(i) for i in np.array(rptslabels) * (1e-6/ img_height) * num_rows]
@@ -1916,8 +1948,14 @@ time = np.linspace(0.0, pxl_time, CPD.shape[1])
 xax = ccoords*pxl_size*1e6
 
 fig, a = plt.subplots(nrows=3, figsize=(13, 10), facecolor='white')
+#im0, cb = px.plot_utils.plot_map(a[0], CPD_on_avg, cmap='inferno', 
+#                                 x_size=img_length*1e6, y_size=img_height*1e6,
+#                                 aspect=aspect)
 im0 = a[0].imshow(CPD_on_avg, cmap='inferno', origin='lower',
                     extent=[0, img_length*1e6, 0, img_height*1e6])
+cbar = plt.colorbar(im0, ax=a[0], orientation='vertical',
+                    fraction=0.046, pad=0.01, use_gridspec=True)
+cbar.set_label('CPD (V)', rotation=270, labelpad = 20)
 a[0].plot(ccoords*pxl_size*1e6, rpts[0]*pxl_ht*1e6*np.ones(len(ccoords)), 'w')
 
 ims = []
@@ -1934,7 +1972,7 @@ mn = np.mean(CPD_mn) - 3*np.std(CPD_mn)
 CPD_mx = np.reshape(CPD[:, p_off+int((CPD.shape[1]-p_off)/2)], [64, 128])
 mx = np.mean(CPD_mx) + 3*np.std(CPD_mx)
 
-displays = np.array([1, p_on, int(p_on+(p_off-p_on)/2), p_off, pnts_per_CPDpix-1])
+displays = np.array([1, p_on, int(p_on+(p_off-p_on)/2), p_off, pnts_per_CPDpix-5])
 markers = ['^-','o-','s-','D-', 'v-']
 labels = ['{0:.2f}'.format(i*dtCPD/1e-3)+ ' ms' for i in displays]
 
@@ -1943,16 +1981,24 @@ for k in range(len(displays)):
     sectn = CPD[linecoords,displays[k]]
     a[1].plot(xax, (sectn-np.min(sectn))/(np.max(sectn)-np.min(sectn)), markers[k], label=labels[k]) 
     a[2].plot(xax, sectn*1e3, markers[k], markersize=8, label=labels[k]) 
-a[1].legend(fontsize='12')
 
 length_labels = str(cptslabels[0])+'-'+str(cptslabels[1])+'um_at_'+str(rptslabels[0])+'_um'
 fig.savefig(output_filepath+'\CPD_composite_'+length_labels+'.tif', format='tif')
 
+a[1].legend(fontsize='12')
+fig.savefig(output_filepath+'\CPD_composite_'+length_labels+'_legend.tif', format='tif')
+
 #%% Animate
+
+import matplotlib.animation as animation
+plt.rcParams['animation.ffmpeg_path'] = r'C:\Users\Raj\Downloads\ffmpeg-20180124-1948b76-win64-static\bin\ffmpeg.exe'
 
 fig, a = plt.subplots(nrows=3, figsize=(13, 10), facecolor='white')
 im0 = a[0].imshow(CPD_on_avg, cmap='inferno', origin='lower',
                     extent=[0, img_length*1e6, 0, img_height*1e6])
+cbar = plt.colorbar(im0, ax=a[0], orientation='vertical',
+                    fraction=0.046, pad=0.01, use_gridspec=True)
+cbar.set_label('CPD (V)', rotation=270, labelpad = 20)
 a[0].plot(ccoords*pxl_size*1e6, rpts[0]*pxl_ht*1e6*np.ones(len(ccoords)), 'w')
 
 ims = []
@@ -1968,7 +2014,8 @@ for k in np.arange(time.shape[0]):
     CPD_rs = np.reshape(CPD[:, int(k)], [64, 128])
     im0 = a[0].imshow(CPD_rs, cmap='inferno', origin='lower',
                     extent=[0, img_length*1e6, 0, img_height*1e6], vmin=mn, vmax=mx)
-    a[0].plot(ccoords*pxl_size*1e6, rpts[0]*pxl_ht*1e6*np.ones(len(ccoords)))
+    
+    a[0].plot(ccoords*pxl_size*1e6, rpts[0]*pxl_ht*1e6*np.ones(len(ccoords)), 'w')
     
     if k in np.arange(p_on,p_off):
         tl0 = a[0].text(img_length/2*1e6 - 1, img_height*1e6+0.1, 'LIGHT ON', color='blue', weight='bold')
@@ -1987,6 +2034,78 @@ for k in np.arange(time.shape[0]):
 ani = animation.ArtistAnimation(fig, ims, interval=60,repeat_delay=10)
 
 ani.save(output_filepath+'\CPD_graph_'+length_labels+'.mp4')
+
+#%% Cross-sectional animation, setup
+
+# note shape of CPD is 64x128, not 128x64
+
+#in length units, in microns here
+cptslabels = [7, 12] #column points, row points
+rptslabels = [2  , 2]
+
+cpts = [int(i) for i in np.array(cptslabels) * (1e-6/ img_length) * num_cols]
+rpts = [int(i) for i in np.array(rptslabels) * (1e-6/ img_height) * num_rows]
+
+#cpts = [69, 76] #column points, row points
+#rpts = [4, 4]
+linecoords = np.arange(rpts[0]*num_cols + cpts[0], rpts[0]*num_cols + cpts[1])
+
+clen = cpts[1] - cpts[0]
+rlen = rpts[1] - rpts[0]
+pxl_size = img_length/num_cols #meter length of a pixel
+pxl_ht = img_height/num_rows #meter height of a pixel
+dtCPD = pxl_time/CPD.shape[1] #dt for the CPD since not same length as raw data
+p_on = int(light_on_time[0]*1e-3 / dtCPD) 
+p_off = int(light_on_time[1]*1e-3 / dtCPD) 
+
+ccoords = np.arange(cpts[0],cpts[1])
+rcoords = np.arange(rpts[0],rpts[1])
+
+time = np.linspace(0.0, pxl_time, CPD.shape[1])
+xax = ccoords*pxl_size*1e6
+
+fig, a = plt.subplots(nrows=3, figsize=(13, 10), facecolor='white')
+#im0, cb = px.plot_utils.plot_map(a[0], CPD_on_avg, cmap='inferno', 
+#                                 x_size=img_length*1e6, y_size=img_height*1e6,
+#                                 aspect=aspect)
+im0 = a[0].imshow(CPD_on_avg, cmap='inferno', origin='lower',
+                    extent=[0, img_length*1e6, 0, img_height*1e6])
+cbar = plt.colorbar(im0, ax=a[0], orientation='vertical',
+                    fraction=0.046, pad=0.01, use_gridspec=True)
+cbar.set_label('CPD (V)', rotation=270, labelpad = 20)
+a[0].plot(ccoords*pxl_size*1e6, rpts[0]*pxl_ht*1e6*np.ones(len(ccoords)), 'w')
+
+ims = []
+a[1].set_ylabel('Normalized CPD (mV)')
+
+a[2].set_xlabel('Distance (um)')
+a[2].set_ylabel('CPD (mV)')
+
+txtcoord = np.max(CPD[linecoords,0])*1e3
+
+#colorscale
+CPD_mn = np.reshape(CPD[:, p_on+int((p_off-p_on)/2)], [64, 128])
+mn = np.mean(CPD_mn) - 3*np.std(CPD_mn)
+CPD_mx = np.reshape(CPD[:, p_off+int((CPD.shape[1]-p_off)/2)], [64, 128])
+mx = np.mean(CPD_mx) + 3*np.std(CPD_mx)
+
+displays = np.array([1, p_on, int(p_on+(p_off-p_on)/2), p_off, pnts_per_CPDpix-5])
+markers = ['^-','o-','s-','D-', 'v-']
+labels = ['{0:.2f}'.format(i*dtCPD/1e-3)+ ' ms' for i in displays]
+
+for k in range(len(displays)):
+    CPD_rs = np.reshape(CPD[:, displays[k]], [64, 128])
+    sectn = CPD[linecoords,displays[k]]
+    #a[1].plot(xax, (sectn-np.min(sectn))/(np.max(sectn)-np.min(sectn)), markers[k], label=labels[k]) 
+    a[1].plot(xax, (sectn-np.min(sectn)), markers[k], label=labels[k]) 
+    a[2].plot(xax, sectn*1e3, markers[k], markersize=8, label=labels[k]) 
+
+length_labels = str(cptslabels[0])+'-'+str(cptslabels[1])+'um_at_'+str(rptslabels[0])+'_um'
+fig.savefig(output_filepath+'\CPD_composite_'+length_labels+'_newNorms_.tif', format='tif')
+a[1].legend(fontsize='12')
+fig.savefig(output_filepath+'\CPD_composite_'+length_labels+'_newNorms_legend.tif', format='tif')
+
+#%% k-means clustering
 
 
     #%% 
