@@ -455,6 +455,8 @@ output_filepath = os.path.expanduser(output_filepath)
 
 img_length = 32e-6
 img_height = 8e-6
+parms_dict['FastScanSize'] = 32e-6
+parms_dict['SlowScanSize'] = 8e-6
 aspect = 0.5 # due to G-mode approach
 
 print('#### IMAGE LENGTH =',img_length,'####')
@@ -656,14 +658,32 @@ if preLoaded == True:
     reconstruct = False
 
     CPD_recon = np.zeros([num_rows*num_cols, wHfit3.shape[1]])
-    CPD_grad_recon = np.zeros([num_rows*num_cols, wHfit3.shape[1]])
+    CPD_grad = np.zeros([num_rows*num_cols, wHfit3.shape[1]])
         
     CPD_recon[:,:] = -0.5*np.divide(wHfit3[:,:,1],wHfit3[:,:,2]) # vertex of parabola
-    CPD_grad_recon[:,:] = wHfit3[:,:,2]
+    CPD_grad[:,:] = wHfit3[:,:,2]
+    
+    CPD_grad_resh_on_avg = np.zeros(CPD_on_time.shape)
+    CPD_grad_resh_off_avg = np.zeros(CPD_on_time.shape)
+    
+    for r in np.arange(CPD_on_time.shape[0]):
+        for c in np.arange(CPD_on_time.shape[1]):
+            CPD_grad_resh_off_avg[r][c] = np.mean(CPD_grad[r*num_cols + c,p_off:])
+            CPD_grad_resh_on_avg[r][c] = np.mean(CPD_grad[r*num_cols + c,p_on:p_off])
     
     dset = wHfit3[:,:,:]
 
-    
+    pnts_per_CPDpix = CPD_recon.shape[1]
+
+#%% Fit function for CPD
+
+def fitexp(x, A, tau, y0, x0):
+    return A * np.exp(-(x - x0) /tau) + y0
+
+def fitbiexp(x, A1, tau1, A2, tau2, y0, x0):
+    return A1*np.exp(-(x-x0)/tau1) + A2*np.exp(-(x-x0)/tau2) + y0
+
+  
 #%% Step 2B) Fourier Filter data
 '''
 Define filter parameters in first cell
@@ -1121,14 +1141,6 @@ if PCA_post_reconstruction_clean == True:
         
     PCA_clean_data_postrecon = test[:,:].reshape(num_rows*num_cols,-1)
 
-#%% Fit function for CPD
-
-def fitexp(x, A, tau, y0, x0):
-    return A * np.exp(-(x - x0) /tau) + y0
-
-def fitbiexp(x, A1, tau1, A2, tau2, y0, x0):
-    return A1*np.exp(-(x-x0)/tau1) + A2*np.exp(-(x-x0)/tau2) + y0
-
 #%% Test fitting on sample data
 
 # This is number of periods you want to average over,
@@ -1316,13 +1328,15 @@ if PCA_post_reconstruction_clean == True:
 
     CPD_PCA = -0.5*np.divide(wHfit3[:,:,1],wHfit3[:,:,2]) # vertex of parabola
     CPD_PCA_cap = wHfit3[:,:,2]
-    CPD = CPD_PCA
+    CPD = CPD_PCA[:,:]
+    CPD_grad = CPD_PCA_cap[:,:]
     
 else:
     
     CPD_raw = -0.5*np.divide(wHfit3[:,:,1],wHfit3[:,:,2])
     CPD_raw_cap = wHfit3[:,:,2]
-    CPD = CPD_raw
+    CPD = CPD_raw[:,:]
+    CPD_grad = CPD_raw_cap[:,:]
     
 # Save to HDF
 e = h5_main.parent.name + '/' + 'Raw_Data-CPD'
@@ -1370,8 +1384,8 @@ if reconstruct:
 
 # Separate CPDs into "light on" and "light off" case
 
-CPD_off = CPD
-CPD_on = CPD
+CPD_off = CPD[:,:]
+CPD_on = CPD[:,:]
 
 time = np.linspace(0.0, pxl_time, CPD.shape[1])
 
@@ -1382,12 +1396,25 @@ p_off = int(light_on_time[1]*1e-3 / dtCPD)
 time_on = time[p_on:p_off]
 time_off = time[p_off:]   # last point is sometimes NaN for some reason
 
+bds_on = ([-10, (1e-5), -5, time_on[0]-1e-10], 
+       [10, (1e-1), 5, time_on[0]+1e-10])
+p0on = [-0.025, 1e-3, 0, time_on[0]]
+
+bds_off = ([-10, (1e-5), -5, time_off[0]-1e-10], 
+           [10, (1e-1), 5, time_off[0]+1e-10])
+p0off = [.025, 1e-3, 0, time_off[0]]
+
+#%% Set up CPD arrays
 # Make CPD on and off, reshape into images by takign averages
 CPD_on = CPD[:, p_on:p_off]
 CPD_off = CPD[:, p_off:]
+CPD_grad_on = CPD_grad[:, p_on:p_off]
+CPD_grad_off = CPD_grad[:, p_off:]
 
 CPD_on_avg = np.zeros((num_rows, num_cols))
 CPD_off_avg = np.zeros((num_rows, num_cols))
+CPD_grad_resh_on_avg = np.zeros((num_rows, num_cols))
+CPD_grad_resh_off_avg = np.zeros((num_rows, num_cols))
 
 CPD_on_time = np.zeros((num_rows, num_cols))
 CPD_off_time = np.zeros((num_rows, num_cols))
@@ -1398,14 +1425,6 @@ CPD_bioff_time_slow = np.zeros((num_rows, num_cols))
 
 CPD_on_mag = np.zeros((num_rows, num_cols))
 CPD_off_mag  = np.zeros((num_rows, num_cols))
-
-bds_on = ([-10, (1e-5), -5, time_on[0]-1e-10], 
-       [10, (1e-1), 5, time_on[0]+1e-10])
-p0on = [-0.025, 1e-3, 0, time_on[0]]
-
-bds_off = ([-10, (1e-5), -5, time_off[0]-1e-10], 
-           [10, (1e-1), 5, time_off[0]+1e-10])
-p0off = [.025, 1e-3, 0, time_off[0]]
 
 #%% Slice of one CPD set
 
@@ -1480,6 +1499,7 @@ for r in np.arange(CPD_on_avg.shape[0]):
     for c in np.arange(CPD_on_avg.shape[1]):
         
         CPD_on_avg[r][c] = np.mean(CPD_on[r*num_cols + c,:])
+        CPD_grad_resh_on_avg[r][c] = np.mean(CPD_grad_on[r*num_cols + c,:])
         cut = CPD_on[r*num_cols + c, :] - CPD_on[r*num_cols + c, 0]
         try:
             popt, _ = curve_fit(fitexp, time_on, cut, 
@@ -1498,6 +1518,7 @@ for r in np.arange(CPD_on_avg.shape[0]):
             print(r, ' ', c)
 
         CPD_off_avg[r][c] = np.mean(CPD_off[r*num_cols + c,:])
+        CPD_grad_resh_off_avg[r][c] = np.mean(CPD_grad_off[r*num_cols + c,:])
         cut = CPD_off[r*num_cols + c, :] - CPD_off[r*num_cols + c, 0]
         try:
             popt, _ = curve_fit(fitexp, time_off, cut, bounds=bds_off)
@@ -1625,7 +1646,7 @@ if save_figure == True:
 fig, a = plt.subplots(nrows=1, figsize=(13, 3))
 _, cbar = px.plot_utils.plot_map(a, CPD_off_time*1e3, cmap='inferno', aspect=aspect, 
                        x_size=img_length*1e6, y_size=img_height*1e6, stdevs = 2,
-                       cbar_label='Time Constant (ms)', vmin=0.60, vmax=1.6)
+                       cbar_label='Time Constant (ms)')
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 a.set_title('CPD Off Time', fontsize=12)
 
@@ -1639,7 +1660,7 @@ if save_figure == True:
 fig, a = plt.subplots(nrows=1, figsize=(13, 3))
 _, cbar = px.plot_utils.plot_map(a, CPD_on_time*1e3, cmap='inferno', aspect=aspect, 
                        x_size=img_length*1e6, y_size=img_height*1e6, stdevs = 2,
-                       cbar_label='Time Constant (ms)', vmin=0.21, vmax=0.63)
+                       cbar_label='Time Constant (ms)', vmin=0.1, vmax = .9)
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 a.set_title('CPD On Time', fontsize=12)
 
@@ -1648,6 +1669,19 @@ if save_figure == True:
         fig.savefig(output_filepath+'\CPDon_times_PCA-Alone.tif', format='tiff')
     else:
         fig.savefig(output_filepath+'\CPDon_times_noPCA-Alone.tif', format='tiff')    
+        
+fig, a = plt.subplots(nrows=1, figsize=(13, 3))
+_, cbar = px.plot_utils.plot_map(a, CPD_grad_resh_on_avg, cmap='inferno', aspect=aspect, 
+                       x_size=img_length*1e6, y_size=img_height*1e6, stdevs = 2,
+                       cbar_label='Gradient (a.u.)')
+cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
+a.set_title('Capacitive Gradient', fontsize=12)
+
+if save_figure == True:
+    if PCA_post_reconstruction_clean == True:
+        fig.savefig(output_filepath+'\CPD_gradient_PCA-Alone.tif', format='tiff')
+    else:
+        fig.savefig(output_filepath+'\CPD_gradient_noPCA-Alone.tif', format='tiff')    
         
 #%%
 # SPV plotting
@@ -1734,7 +1768,7 @@ from pixelCPD import averagemask
 #mask = np.fliplr(np.transpose(np.loadtxt('E:/ORNL/20191221_BAPI/BAPI6-9 Text/BAPI20_grain_mask.txt')))
 #CPD_GB_avg = averagemask(CPD, mask)
 #CPD_GC_avg = averagemask(CPD, mask, avg_flag = 1)
-#mask[mask==1] = np.nan
+#
 #
 #fig, a = plt.subplots()
 #a.set_title('CPD On Time', fontsize=12)
@@ -1933,7 +1967,7 @@ for k in timeslice:
 # note shape of CPD is 64x128, not 128x64
 
 #in length units, in microns here
-cptslabels = [7, 12] #column points, row points
+cptslabels = [4, 9] #column points, row points
 rptslabels = [2  , 2]
 
 cpts = [int(i) for i in np.array(cptslabels) * (1e-6/ img_length) * num_cols]
