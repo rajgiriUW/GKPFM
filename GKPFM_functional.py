@@ -1721,11 +1721,7 @@ indices = {.1:1,
            24:7,
            30:3
            }
-indices = {
-           7.4:1,
-           8:1
-           
-           }
+
 
 cptslabels = [k for k in indices] #column points, row points
 rptslabels = [k for k in indices.values()]

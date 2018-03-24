@@ -83,10 +83,10 @@ class CPD_cluster(object):
         
         self.CPD_params()
         
-
         # Create mask for grain boundaries
         self.mask = mask
         self.mask_nan, self.mask_on_1D, self.mask_off_1D = mask_utils.load_masks(self.mask)
+        self.CPD_1D_idx = np.copy(self.mask_off_1D)
         
         return
         
@@ -99,8 +99,8 @@ class CPD_cluster(object):
         
         """
         # Create 1D arrays 
-        self.CPD_1D_vals = self.CPD_positions(CPD_avg,self.mask)
-        self.mask_on_1D_pos, self.mask_off_1D_pos, self.CPD_1D_pos = self.make_distance_arrays()
+        self.CPD_values(CPD_avg,self.mask)
+        self.make_distance_arrays()
         
         self.CPD_dist, _ = self.CPD_distances(self.CPD_1D_pos, self.mask_on_1D_pos)
         
@@ -132,7 +132,7 @@ class CPD_cluster(object):
         
         return
 
-    def CPD_positions(self, CPD_avg, mask):
+    def CPD_values(self, CPD_avg, mask):
         """
         Uses 1D Mask file (with NaN and 0) and generates CPD of non-grain boundary regions
         
@@ -151,12 +151,14 @@ class CPD_cluster(object):
         """
             
         ones = np.where(mask == 1)
-        CPD_1D_vals = np.zeros(ones[0].shape[0])
+        self.CPD_avg_1D_vals = np.zeros(ones[0].shape[0])
+        self.CPD_1D_vals = np.zeros([ones[0].shape[0], self.CPD.shape[1]])
     
-        for r,c,x in zip(ones[0], ones[1], np.arange(CPD_1D_vals.shape[0])):
-            CPD_1D_vals[x] = CPD_avg[r][c]
+        for r,c,x in zip(ones[0], ones[1], np.arange(self.CPD_avg_1D_vals.shape[0])):
+            self.CPD_avg_1D_vals[x] = CPD_avg[r][c]
+            self.CPD_1D_vals[x,:] = self.CPD[self.num_cols*r + c,:]
     
-        return CPD_1D_vals
+        return 
 
     def make_distance_arrays(self):
         """
@@ -199,7 +201,11 @@ class CPD_cluster(object):
         
         CPD_1D_pos = np.copy(mask_off_1D_pos) # to keep straight, but these are the same
         
-        return mask_on_1D_pos, mask_off_1D_pos, CPD_1D_pos
+        self.mask_on_1D_pos = mask_on_1D_pos
+        self.mask_off_1D_pos = mask_off_1D_pos
+        self.CPD_1D_pos = CPD_1D_pos
+        
+        return
 
 
     def CPD_distances(self,CPD_1D_pos, mask_on_1D_pos):
@@ -220,11 +226,124 @@ class CPD_cluster(object):
         
         # create single [x,y] dataset
         self.CPD_scatter = np.zeros([CPD_dist.shape[0],2])
-        for x,y,z in zip(CPD_dist, self.CPD_1D_vals, np.arange(CPD_dist.shape[0])):
+        for x,y,z in zip(CPD_dist, self.CPD_avg_1D_vals, np.arange(CPD_dist.shape[0])):
             self.CPD_scatter[z] = [x, y]
         
         return CPD_dist, CPD_avg_dist
 
+    def kmeans(self, data, clusters=3, show_results=False):
+        
+        """"
+        
+        Simple k-means
+        
+        Data typically is self.CPD_scatter
+        
+        Returns
+        -------
+        self.results : KMeans type
+        
+        self.segments : dict, Nclusters
+            Contains the segmented arrays for displaying
+            
+        """
+        
+        # create single [x,y] dataset
+        estimators = cluster.KMeans(clusters)
+        self.results = estimators.fit(data)
+        
+        labels = self.results.labels_
+        cluster_centers = self.results.cluster_centers_
+        labels_unique = np.unique(labels)
+        
+        self.segments = {}
+        
+        if show_results:
+            plt.figure()
+            plt.xlabel('Distance to Nearest Boundary (um)')
+            plt.ylabel('CPD (V)')
+            for i in range(clusters):
+                
+                plt.plot(self.CPD_scatter[labels==labels_unique[i],0]*1e6,
+                         self.CPD_scatter[labels==labels_unique[i],1],
+                         'C'+str(i)+'.')
+        
+                plt.plot(cluster_centers[i][0]*1e6, cluster_centers[i][1],
+                         marker='o',markerfacecolor ='C'+str(i), markersize=8, 
+                         markeredgecolor='k')
+                
+        return self.results
+    
+    def segment_maps(self):
+        
+        """
+        segments is in actual length
+        segments_idx is in index coordinates
+        segments_CPD is the the full CPD trace
+        
+        To display, make sure to do [:,1], [:,0] given row, column ordering
+        Also, segments_idx is to display since pyplot uses the index on the axis
+        
+        """
+        
+        labels = self.results.labels_
+        cluster_centers = self.results.cluster_centers_
+        labels_unique = np.unique(labels)
+        
+        self.segments = {}
+        self.segments_idx = {}
+        self.segments_CPD = {}
+        self.segments_CPD_avg = {}
+        
+        for i in range(len(labels_unique)):
+            self.segments[i] = self.CPD_1D_pos[labels==labels_unique[i],:]
+            self.segments_idx[i] = self.CPD_1D_idx[labels==labels_unique[i],:]
+            self.segments_CPD[i] = self.CPD_1D_vals[labels==labels_unique[i],:]
+            self.segments_CPD_avg[i] = self.CPD_avg_1D_vals[labels==labels_unique[i]]
+        
+        # the average CPD in that segment
+        self.CPD_time_avg = {}
+        for i in range(len(labels_unique)):
+            
+            self.CPD_time_avg[i] = np.mean(self.segments_CPD[i], axis=0)
+        
+        return
+
+
+###########################################
+
+def kmeans(CPD_dist, CPD_1D_vals, clusters=3, show_results=False):
+    
+    # create single [x,y] dataset
+    CPD_scatter = np.zeros([CPD_dist.shape[0],2])
+    for x,y,z in zip(CPD_dist, CPD_1D_vals, np.arange(CPD_dist.shape[0])):
+        CPD_scatter[z] = [x, y]
+        
+    estimators = cluster.KMeans(clusters)
+    results = estimators.fit(CPD_scatter)
+    
+    labels = results.labels_
+    cluster_centers = results.cluster_centers_
+    labels_unique = np.unique(labels)
+    
+    if show_results:
+        plt.figure()
+        plt.xlabel('Distance to Nearest Boundary (um)')
+        plt.ylabel('CPD (V)')
+        for i in range(clusters):
+            
+            plt.plot(CPD_scatter[labels==labels_unique[i],0]*1e6,
+                     CPD_scatter[labels==labels_unique[i],1],
+                     'C'+str(i)+'.')
+    
+            plt.plot(cluster_centers[i][0]*1e6, cluster_centers[i][1],
+                     marker='o',markerfacecolor ='C'+str(i), markersize=8, 
+                     markeredgecolor='k')
+            
+    return results
+
+def seg_distances(CPD_scatter, labels):
+    return
 
 def CPD_positions(h5_file, CPD_avg, mask, CPD_loc = '/Measurement_000/Channel_000/Raw_Data-CPD'):
     """
@@ -328,36 +447,4 @@ def CPD_distances(CPD_1D_pos, mask_on_1D_pos):
     
     return CPD_dist, CPD_avg_dist
 
-def kmeans(CPD_dist, CPD_1D_vals, clusters=3, show_results=False):
-    
-    # create single [x,y] dataset
-    CPD_scatter = np.zeros([CPD_dist.shape[0],2])
-    for x,y,z in zip(CPD_dist, CPD_1D_vals, np.arange(CPD_dist.shape[0])):
-        CPD_scatter[z] = [x, y]
-        
-    estimators = cluster.KMeans(clusters)
-    results = estimators.fit(CPD_scatter)
-    
-    labels = results.labels_
-    cluster_centers = results.cluster_centers_
-    labels_unique = np.unique(labels)
-    
-    if show_results:
-        plt.figure()
-        plt.xlabel('Distance to Nearest Boundary (um)')
-        plt.ylabel('CPD (V)')
-        for i in range(clusters):
-            
-            plt.plot(CPD_scatter[labels==labels_unique[i],0]*1e6,
-                     CPD_scatter[labels==labels_unique[i],1],
-                     'C'+str(i)+'.')
-    
-            plt.plot(cluster_centers[i][0]*1e6, cluster_centers[i][1],
-                     marker='o',markerfacecolor ='C'+str(i), markersize=8, 
-                     markeredgecolor='k')
-            
-    return results
 
-def seg_distances(CPD_scatter, labels):
-    
-    return
