@@ -28,6 +28,10 @@ def loadmask(path, rows=64):
     
     mask = mask[:rows, :]
     
+    return
+
+def load_masks(mask):
+    
     mask_nan = np.copy(mask)
 
     # tuple of coordinates
@@ -38,7 +42,7 @@ def loadmask(path, rows=64):
 
     mask_nan[mask_nan == 1] = np.nan
     
-    return mask, mask_nan, mask_on_1D, mask_off_1D
+    return mask_nan, mask_on_1D, mask_off_1D
 
 def averagemask(CPDarr, mask, rows=128, nan_flag = 1, avg_flag = 0):
     '''
