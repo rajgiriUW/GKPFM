@@ -147,6 +147,9 @@ class CPD_cluster(object):
         
         CPD_loc : str, optional
             The path to the dataset within the h5_file
+            
+        CPD_1D_vals : CPD as a 1D array with pnts_per_CPD points
+        CPD_avg_1D_vals : Average CPD (CPD_on_avg, say) that is 1D
         
         """
             
@@ -225,9 +228,12 @@ class CPD_cluster(object):
             CPD_avg_dist[x] = np.mean(d)
         
         # create single [x,y] dataset
-        self.CPD_scatter = np.zeros([CPD_dist.shape[0],2])
+        self.CPD_avg_scatter = np.zeros([CPD_dist.shape[0],2])
         for x,y,z in zip(CPD_dist, self.CPD_avg_1D_vals, np.arange(CPD_dist.shape[0])):
-            self.CPD_scatter[z] = [x, y]
+            self.CPD_avg_scatter[z] = [x, y]
+
+        self.CPD_scatter = np.copy(self.CPD_1D_vals)
+        self.CPD_scatter = np.insert(self.CPD_scatter, 0, CPD_dist, axis=1)
         
         return CPD_dist, CPD_avg_dist
 
@@ -255,17 +261,17 @@ class CPD_cluster(object):
         labels = self.results.labels_
         cluster_centers = self.results.cluster_centers_
         labels_unique = np.unique(labels)
-        
         self.segments = {}
         
+        # color defaults are blue, orange, green, red, purple...
         if show_results:
             plt.figure()
             plt.xlabel('Distance to Nearest Boundary (um)')
             plt.ylabel('CPD (V)')
             for i in range(clusters):
                 
-                plt.plot(self.CPD_scatter[labels==labels_unique[i],0]*1e6,
-                         self.CPD_scatter[labels==labels_unique[i],1],
+                plt.plot(data[labels==labels_unique[i],0]*1e6,
+                         data[labels==labels_unique[i],1],
                          'C'+str(i)+'.')
         
                 plt.plot(cluster_centers[i][0]*1e6, cluster_centers[i][1],
