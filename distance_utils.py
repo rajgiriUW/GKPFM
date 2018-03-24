@@ -90,8 +90,14 @@ class CPD_cluster(object):
         
         return
         
-    def create_CPD_1D(self, CPD_avg):
-        """ Creates 1D arrays of data and masks """
+    def analyze_CPD(self, CPD_avg):
+        """ 
+        Creates 1D arrays of data and masks 
+        Then, calculates the distances and saves those.
+        
+        This also creates CPD_scatter within the distances function
+        
+        """
         # Create 1D arrays 
         self.CPD_1D_vals = self.CPD_positions(CPD_avg,self.mask)
         self.mask_on_1D_pos, self.mask_off_1D_pos, self.CPD_1D_pos = self.make_distance_arrays()
@@ -211,6 +217,11 @@ class CPD_cluster(object):
             d = metrics.pairwise_distances([i], mask_on_1D_pos)
             CPD_dist[x] = np.min(d)
             CPD_avg_dist[x] = np.mean(d)
+        
+        # create single [x,y] dataset
+        self.CPD_scatter = np.zeros([CPD_dist.shape[0],2])
+        for x,y,z in zip(CPD_dist, self.CPD_1D_vals, np.arange(CPD_dist.shape[0])):
+            self.CPD_scatter[z] = [x, y]
         
         return CPD_dist, CPD_avg_dist
 
