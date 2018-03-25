@@ -124,6 +124,9 @@ class CPD_cluster(object):
         p_on = int(self.light_on_time[0]*1e-3 / self.dtCPD) 
         p_off = int(self.light_on_time[1]*1e-3 / self.dtCPD) 
         
+        self.p_on = p_on
+        self.p_off = p_off
+        
         for r in np.arange(CPD_on_time.shape[0]):
             for c in np.arange(CPD_on_time.shape[1]):
                 
@@ -264,6 +267,10 @@ class CPD_cluster(object):
         self.segments = {}
         
         # color defaults are blue, orange, green, red, purple...
+        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', 
+                  '#d62728', '#9467bd', '#8c564b', 
+                  '#e377c2', '#7f7f7f', '#bcbd22', 
+                  '#17becf']
         if show_results:
             plt.figure()
             plt.xlabel('Distance to Nearest Boundary (um)')
@@ -271,11 +278,11 @@ class CPD_cluster(object):
             for i in range(clusters):
                 
                 plt.plot(data[labels==labels_unique[i],0]*1e6,
-                         data[labels==labels_unique[i],1],
-                         'C'+str(i)+'.')
+                         data[labels==labels_unique[i],1],c=colors[i],
+                         linestyle='None', marker='.')
         
                 plt.plot(cluster_centers[i][0]*1e6, cluster_centers[i][1],
-                         marker='o',markerfacecolor ='C'+str(i), markersize=8, 
+                         marker='o',markerfacecolor = colors[i], markersize=8, 
                          markeredgecolor='k')
                 
         return self.results
@@ -315,6 +322,12 @@ class CPD_cluster(object):
         
         return
 
+    def elbow_plot(self):
+        
+#        Ks = range(1, 10)
+#km = [KMeans(n_clusters=i) for i in Ks]
+#score = [km[i].fit(my_matrix).score(my_matrix) for i in range(len(km))]
+        return
 
 ###########################################
 
