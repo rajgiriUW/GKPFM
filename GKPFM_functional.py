@@ -94,7 +94,7 @@ button_layout=dict(
 
 import os
 
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_TUNE__0009'
+output_filepath = r'E:\ORNL\20191219_BAPI\BAPI2_TUNE__0003'
 save_figure = True
 
 output_filepath = os.path.expanduser(output_filepath)
@@ -449,14 +449,13 @@ hdf.close()
 from pathlib import Path
 
 # Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_6ms_green700mA__0005'
+output_filepath = r'E:\ORNL\20191219_BAPI\BAPI5_400mA_3V__0005'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
 
-img_length = 32e-6
-img_height = 8e-6
-parms_dict['FastScanSize'] = 32e-6
-parms_dict['SlowScanSize'] = 8e-6
+img_length = 20e-6
+img_height = 5e-6
+
 aspect = 0.5 # due to G-mode approach
 
 print('#### IMAGE LENGTH =',img_length,'####')
@@ -517,15 +516,21 @@ samp_rate = parms_dict['IO_rate_[Hz]']
 ex_freq = parms_dict['BE_center_frequency_[Hz]']
 num_rows = parms_dict['grid_num_rows']
 num_cols = parms_dict['grid_num_cols']
+parms_dict['num_rows'] = num_rows
+parms_dict['num_cols'] = num_cols
 h5_pos_vals=px.hdf_utils.getAuxData(h5_main, auxDataName='Position_Values')[0]
 h5_pos_inds=px.hdf_utils.getAuxData(h5_main, auxDataName='Position_Indices')[0]
 num_pts = h5_main.shape[1]
 pnts_per_pix=int(num_pts/num_cols)
 
+parms_dict['FastScanSize'] = img_length
+parms_dict['SlowScanSize'] = img_height
+
 N_points = parms_dict['num_bins']
 N_points_per_pixel = parms_dict['num_bins']
 time_per_osc = (1/parms_dict['BE_center_frequency_[Hz]'])
 IO_rate = parms_dict['IO_rate_[Hz]']     #sampling_rate
+parms_dict['sampling_rate'] = IO_rate
 pnts_per_period = IO_rate * time_per_osc #points per oscillation period
 pxl_time = N_points_per_pixel/IO_rate    #seconds per pixel
 num_periods = int(pxl_time/time_per_osc) #total # of periods per pixel, should be an integer
@@ -746,8 +751,7 @@ This segment does two things:
 
 # Phase Offset
 ph = -0.3 + np.pi   # phase from cable delays between excitation and response
-
-#ph = -0.3 - np.pi
+ph = 1.16 + np.pi
 
 # Calculates NoiseLimit
 fft_h5row = np.fft.fftshift(np.fft.fft(h5_main[row_ind]))
@@ -758,7 +762,6 @@ Noiselimit = np.ceil(noise_floor)
 # Try Force Conversion on Filtered data of single line (row_ind above)
 G_line = np.zeros(w_vec2.size,dtype=complex)         # G = raw
 G_wPhase_line = np.zeros(w_vec2.size,dtype=complex)  # G_wphase = phase-shifted
-
 
 signal_ind_vec = np.arange(w_vec2.size)
 ind_drive = (np.abs(w_vec2-ex_freq)).argmin()
@@ -783,6 +786,33 @@ G_wPhase_time_line = np.real(np.fft.ifft(np.fft.ifftshift(G_wPhase_line)))
 # On a single line, row_ind is above in previous cell
 FRaw_resp = np.fft.fftshift(np.fft.fft(h5_main[row_ind]))
 
+phaseshifted = G_wPhase_time_line.reshape(-1, pixel_ex_wfm.size)
+fig, axes = px.plot_utils.plot_loops(pixel_ex_wfm, phaseshifted, use_rainbow_plots=True, 
+                                     x_label='Voltage (Vac)', title='Phase Shifted',
+                                     plots_on_side=2, y_label='Deflection (a.u.)')
+
+# iteratively find the phase
+search_phase = True
+if search_phase == True:
+    fits = []
+    xpts = np.arange(1.1, 1.2, 0.01)
+    for i in xpts:
+        
+        test_shifted = (test_line)*np.exp(-1j*w_vec2/(w_vec2[ind_drive])*i)
+        G_wPhase_line[signal_ind_vec] = test_shifted[signal_ind_vec]
+        G_wPhase_line = (G_wPhase_line/TF_norm)
+        G_wPhase_time_line = np.real(np.fft.ifft(np.fft.ifftshift(G_wPhase_line)))
+        phaseshifted = G_wPhase_time_line.reshape(-1, pixel_ex_wfm.size)
+        
+        p1, _ = npPoly.polyfit(pixel_ex_wfm[8:24], phaseshifted[0,8:24], 2, full=True)
+        p2, _ = npPoly.polyfit(pixel_ex_wfm[24:40], phaseshifted[0,24:40], 2, full=True)
+        
+        fit1 = -0.5*p1[1]/p1[2]
+        fit2 = -0.5*p2[1]/p2[2]
+        fits.append(np.abs(fit2-fit1))
+    
+    print(np.argmin(fits),xpts[np.argmin(fits)])
+    ph = xpts[np.argmin(fits)]
 #%%
 # Plotting F3R
 fig, ax = plt.subplots(figsize=(12, 7))
@@ -1116,10 +1146,10 @@ if save_figure == True:
 
 
 #%% Here you can PCA clean data if you like
-PCA_post_reconstruction_clean = False
+PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,1,4,5,6, 7, 8]) ##Components you want to keep
+    clean_components = np.array([0,1,4,5,6,7]) ##Components you want to keep
     #num_components = len(clean_components)
     
     # checks for existing SVD
@@ -1328,15 +1358,15 @@ if PCA_post_reconstruction_clean == True:
 
     CPD_PCA = -0.5*np.divide(wHfit3[:,:,1],wHfit3[:,:,2]) # vertex of parabola
     CPD_PCA_cap = wHfit3[:,:,2]
-    CPD = CPD_PCA[:,:]
-    CPD_grad = CPD_PCA_cap[:,:]
+    CPD[:,:] = CPD_PCA[:,:]
+    CPD_grad[:,:] = CPD_PCA_cap[:,:]
     
 else:
     
     CPD_raw = -0.5*np.divide(wHfit3[:,:,1],wHfit3[:,:,2])
     CPD_raw_cap = wHfit3[:,:,2]
-    CPD = CPD_raw[:,:]
-    CPD_grad = CPD_raw_cap[:,:]
+    CPD[:,:] = CPD_raw[:,:]
+    CPD_grad[:,:] = CPD_raw_cap[:,:]
     
 # Save to HDF
 e = h5_main.parent.name + '/' + 'Raw_Data-CPD'
@@ -1344,8 +1374,9 @@ e = h5_main.parent.name + '/' + 'Raw_Data-CPD'
 if e in hdf.file:
     print('Overwriting CPD dataset')
     grp_name = hdf.file[e]
-    ds_CPD = grp_name['CPD']
-    ds_CPD = CPD[:,:]
+    grp_name['CPD'][:,:] = CPD[:,:]
+    
+    print(np.allclose(grp_name['CPD'].value, CPD))
     
 else:    
     print('Creating new dataset')
@@ -1456,11 +1487,11 @@ bds = ([-10, (1e-5), -5, time_off[0]-1e-10],
        [10, (1e-1), 5, time_off[0]+1e-10])
 
 cut = CPD_off[r*num_cols + c, :] - CPD_off[r*num_cols + c, 0]
-popt2, _ = curve_fit(fitexp, time_off, cut, bounds=bds )
-print(popt2[1]*1e3, ' ms CPD off tau')
+popt1, _ = curve_fit(fitexp, time_off, cut, bounds=bds )
+print(popt1[1]*1e3, ' ms CPD off tau')
 plt.figure(figsize=(8,6))
 plt.plot(time_off, cut)
-plt.plot(time_off, fitexp(time_off, *popt2), 'r--')
+plt.plot(time_off, fitexp(time_off, *popt1), 'r--')
 plt.savefig(output_filepath+'\CPD_off_fitting_example.tif', format='tiff')
 
 bds_bion = ([1e-15,     1e-5,   1e-15,     1e-5,   -5, time_on[0]-1e-10], 
@@ -1579,6 +1610,14 @@ except:
     grp_CPD.addChildren([ds_SPV])
     grp_CPD.attrs['pulse_time'] = [light_on_time[0], light_on_time[1]]
     hdf.writeData(grp_CPD, print_log=True)
+
+# Creates ancillary datasets
+from ffta.utils import hdf_utils
+parms_dict['pnts_per_avg'] = CPD.shape[1]
+parms_dict['sampling_rate'] = samp_rate
+hdf_utils.add_standard_sets(h5_main.file, group='Measurement_000/Channel_000/Raw_Data-CPD', 
+                            parms_dict=parms_dict, ds='CPD')
+
 
 #%%
 # Plotting
@@ -1722,7 +1761,17 @@ indices = {.1:1,
            30:3
            }
 
+img_length = parms_dict['FastScanSize']
+img_height = parms_dict['SlowScanSize']
 
+# Random indices to check the CPD
+useRandomPixels = True
+if useRandomPixels:
+    
+    keys = np.random.randint(0, num_cols, size=[5])*img_length*1e6/num_cols
+    vals = np.random.randint(0, num_rows, size=[5])*img_height*1e6/num_rows
+    indices = dict(zip(keys, vals))
+        
 cptslabels = [k for k in indices] #column points, row points
 rptslabels = [k for k in indices.values()]
 cpts = [int(i) for i in np.round(np.array(cptslabels) * (1e-6/ img_length) * num_cols)]
@@ -1963,8 +2012,8 @@ for k in timeslice:
 # note shape of CPD is 64x128, not 128x64
 
 #in length units, in microns here
-cptslabels = [4, 9] #column points, row points
-rptslabels = [2  , 2]
+cptslabels = [12, 16] #column points, row points
+rptslabels = [3.8  , 3.8]
 
 cpts = [int(i) for i in np.array(cptslabels) * (1e-6/ img_length) * num_cols]
 rpts = [int(i) for i in np.array(rptslabels) * (1e-6/ img_height) * num_rows]
@@ -2080,8 +2129,8 @@ ani.save(output_filepath+'\CPD_graph_'+length_labels+'.mp4')
 # note shape of CPD is 64x128, not 128x64
 
 #in length units, in microns here
-cptslabels = [7, 12] #column points, row points
-rptslabels = [2  , 2]
+cptslabels = [12, 16] #column points, row points
+rptslabels = [2 , 2]
 
 cpts = [int(i) for i in np.array(cptslabels) * (1e-6/ img_length) * num_cols]
 rpts = [int(i) for i in np.array(rptslabels) * (1e-6/ img_height) * num_rows]
@@ -2146,6 +2195,39 @@ a[1].legend(fontsize='12')
 fig.savefig(output_filepath+'\CPD_composite_'+length_labels+'_newNorms_legend.tif', format='tif')
 
 #%% k-means clustering
+
+from ffta.utils import distance_utils, mask_utils
+
+clusters=3
+
+img_length = parms_dict['FastScanSize']
+img_height = parms_dict['SlowScanSize']
+group = h5_main.name + '-CPD'
+
+mask = mask_utils.load_mask_txt('E:/ORNL/20191219_BAPI/BaPI_5_400mA_3V_Mask.txt', flip=False)
+CPD_clust = distance_utils.CPD_cluster(h5_main.file,ds_group = group, mask=mask, 
+                                       imgsize=[img_length, img_height], light_on=light_on_time)
+
+CPD_clust.analyze_CPD(CPD_clust.CPD_on_avg)
+_, _, fig = CPD_clust.kmeans(CPD_clust.CPD_scatter, show_results=True,clusters=clusters)
+if save_figure == True:
+    fig.savefig(output_filepath+'\k_means_vs_grain_distance_numclusters-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
+
+CPD_clust.heat_map()
+if save_figure == True:
+    fig.savefig(output_filepath+'\k_means_vs_grain_distance_heat_map_numclusters-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
+
+CPD_clust.segment_maps()
+
+fig, a = plt.subplots(nrows=1, figsize=(12,6))
+px.plot_utils.plot_map(a, CPD_on_avg, x_size=img_length*1e6, y_size=img_height*1e6, 
+                       aspect=aspect, cmap='inferno')
+px.plot_utils.plot_map(a, CPD_clust.mask_nan, x_size=img_length*1e6, y_size=img_height*1e6, 
+                       aspect=0.5, cmap='hot', show_cbar=False)
+CPD_clust.plot_segment_maps(a)
+
+if save_figure == True:
+    fig.savefig(output_filepath+'\clustered_CPD-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
 
 
     #%% 
