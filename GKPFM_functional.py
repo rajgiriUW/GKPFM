@@ -30,7 +30,6 @@ This notebook will allow fast KPFM by recovery of the electrostatic foce directl
 
 #### (5) Data Visualization
 **(5a)** Visualization and clustering of fitting parameters and CPD.<br>
-<font color=red>GIF movies and Kmeans clustering will be added. <br></font>
 
 '''
 #%% Installing required packages
@@ -94,7 +93,7 @@ button_layout=dict(
 
 import os
 
-output_filepath = r'E:\ORNL\20191219_BAPI\BAPI2_TUNE__0003'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_TUNE__0009'
 save_figure = True
 
 output_filepath = os.path.expanduser(output_filepath)
@@ -449,7 +448,7 @@ hdf.close()
 from pathlib import Path
 
 # Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191219_BAPI\BAPI5_400mA_3V__0005'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_6ms_green700mA__0005'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
 
@@ -645,12 +644,15 @@ if preLoaded == True:
     
     CPD_off_avg = np.zeros(CPD_on_time.shape)
     CPD_on_avg = np.zeros(CPD_on_time.shape)
+    SPV = CPD_on_avg - CPD_off_avg
     parms_dict = h5_main.parent.parent.attrs
     num_rows = parms_dict['grid_num_rows']
     num_cols = parms_dict['grid_num_cols']
     dtCPD = pxl_time/CPD.shape[1] 
     p_on = int(light_on_time[0]*1e-3 / dtCPD) 
     p_off = int(light_on_time[1]*1e-3 / dtCPD) 
+    CPD_on = CPD[:, p_on:p_off]
+    CPD_off = CPD[:, p_off:]
     
     for r in np.arange(CPD_on_time.shape[0]):
         for c in np.arange(CPD_on_time.shape[1]):
