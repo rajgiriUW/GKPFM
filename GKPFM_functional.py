@@ -464,7 +464,7 @@ print('#### IMAGE LENGTH =',img_length,'####')
 
 pre_load_files = False
 if pre_load_files is False:
-    input_file_path = px.io_utils.uiGetFile(caption='Select translated .h5 file or raw experiment data',
+    input_file_path = px.io_utils.file_dialog(caption='Select translated .h5 file or raw experiment data',
                                             file_filter='Parameters for raw G-Line data (*.dat);; \
                                             Translated file (*.h5)')
 else:
@@ -489,8 +489,8 @@ if input_file_path.endswith('.dat'):
         preLoaded = False
 else:
     h5_path = input_file_path
-    hdf = px.ioHDF5(h5_path)
-    px.hdf_utils.print_tree(hdf.file)
+    hdf = px.io.HDFwriter(h5_path)
+    px.hdf_utils.print_tree(hdf.file, rel_paths=True)
     preLoaded = True #for pre-loading some data
     
 # to automatically set light_on times
@@ -508,9 +508,9 @@ del(b)
 #%% Step 2A.i) Extract some relevant parameters
 
 # Getting ancillary information and other parameters
-h5_main = px.hdf_utils.getDataSet(hdf.file,'Raw_Data')[0]
-h5_spec_vals = px.hdf_utils.getAuxData(h5_main, auxDataName='Spectroscopic_Values')[0]
-h5_spec_inds=px.hdf_utils.getAuxData(h5_main, auxDataName='Spectroscopic_Indices')[0]
+h5_main = px.hdf_utils.find_dataset(hdf.file,'Raw_Data')[0]
+h5_spec_vals = px.hdf_utils.get_auxiliary_datasets(h5_main, auxDataName='Spectroscopic_Values')[0]
+h5_spec_inds=px.hdf_utils.get_auxiliary_datasets(h5_main, auxDataName='Spectroscopic_Indices')[0]
 
 # General parameters
 parms_dict = h5_main.parent.parent.attrs
@@ -520,8 +520,8 @@ num_rows = parms_dict['grid_num_rows']
 num_cols = parms_dict['grid_num_cols']
 parms_dict['num_rows'] = num_rows
 parms_dict['num_cols'] = num_cols
-h5_pos_vals=px.hdf_utils.getAuxData(h5_main, auxDataName='Position_Values')[0]
-h5_pos_inds=px.hdf_utils.getAuxData(h5_main, auxDataName='Position_Indices')[0]
+h5_pos_vals=px.hdf_utils.get_auxiliary_datasets(h5_main, auxDataName='Position_Values')[0]
+h5_pos_inds=px.hdf_utils.get_auxiliary_datasets(h5_main, auxDataName='Position_Indices')[0]
 num_pts = h5_main.shape[1]
 pnts_per_pix=int(num_pts/num_cols)
 
@@ -540,7 +540,7 @@ num_periods = int(pxl_time/time_per_osc) #total # of periods per pixel, should b
 parms_dict['length'] = img_length
 parms_dict['height'] = img_height
 
-grp_CPD = px.MicroDataGroup(h5_main.parent.parent.name)
+grp_CPD = px.io.VirtualGroup(h5_main.parent.parent.name)
 grp_CPD.attrs['length'] = img_length
 grp_CPD.attrs['height'] = img_height
 
