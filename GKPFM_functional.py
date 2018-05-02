@@ -195,7 +195,7 @@ Primarily just care about TF_norm, but loads all other stuff as well
 '''
 if loadTuneValues == True:
 
-    hdf = px.ioHDF5(h5_path)
+    hdf = px.hdf_utils.h5py.File(h5_path)
     h5_file = hdf.file
     nm_base = '/Measurement_000'
     tune_base = '/Tune_Values'
@@ -207,7 +207,7 @@ if loadTuneValues == True:
     
     for key in tune_items:
         
-        tune_items[key] = px.hdf_utils.getDataSet(grp, key)[0].value
+        tune_items[key] = px.hdf_utils.find_dataset(grp, key)[0].value
     
     TF_norm = tune_items['TF_norm']
     
@@ -250,10 +250,10 @@ band_edge_mat = MB_parm_vec[:,1:3]
 #%% Step 1B.i) Get response
 
 # [0] and [1] are the DAQ channels, use HDFView for better understanding
-hdf = px.ioHDF5(h5_path)
+hdf = px.hdf_utils.h5py.File(h5_path)
 h5_file = hdf.file
-h5_resp = px.hdf_utils.getDataSet(hdf.file, 'Raw_Data')[0]  # from tip
-h5_main = px.hdf_utils.getDataSet(hdf.file, 'Raw_Data')[-1] # chirp to tip
+h5_resp = px.hdf_utils.find_dataset(hdf.file, 'Raw_Data')[0]  # from tip
+h5_main = px.hdf_utils.find_dataset(hdf.file, 'Raw_Data')[-1] # chirp to tip
 
 parms_dict = h5_main.parent.parent.attrs
 
@@ -355,12 +355,16 @@ for k1 in range(num_bandsVal):
                       Q_guess,
                       phi_guess]
 
-    coef_vec = px.be_sho.SHOestimateGuess(response_vec, wbb, 10)
+    coef_vec = px.analysis.guess_methods.GuessMethods()
+    coef_vec = coef_vec.complex_gaussian(response_vec, frequencies=wbb, num_points=10)
+    
+    response_guess_vec = px.analysis.fit_methods.Fit_Methods()
+    response_guess_vec = response_guess_vec.SHO(coef_guess_vec, wbb)
 
     response_guess_vec = px.be_sho.SHOfunc(coef_guess_vec, wbb)
     response_fit_vec = px.be_sho.SHOfunc(coef_vec, wbb)
 
-    # Saves the response ni MHz, not used anywhere else
+    # Saves the response in MHz, not used anywhere else
     coef_vec[1] = coef_vec[1]*1E6 #convert to MHz
     coef_mat[k1,:] = coef_vec
     response_fit_full_vec = px.be_sho.SHOfunc(coef_vec,w_vec2)
