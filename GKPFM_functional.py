@@ -250,7 +250,8 @@ band_edge_mat = MB_parm_vec[:,1:3]
 #%% Step 1B.i) Get response
 
 # [0] and [1] are the DAQ channels, use HDFView for better understanding
-hdf = px.hdf_utils.h5py.File(h5_path)
+
+hdf = px.io.HDFwriter(h5_path)
 h5_file = hdf.file
 h5_resp = px.hdf_utils.find_dataset(hdf.file, 'Raw_Data')[0]  # from tip
 h5_main = px.hdf_utils.find_dataset(hdf.file, 'Raw_Data')[-1] # chirp to tip
@@ -355,19 +356,14 @@ for k1 in range(num_bandsVal):
                       Q_guess,
                       phi_guess]
 
-    coef_vec = px.analysis.guess_methods.GuessMethods()
-    coef_vec = coef_vec.complex_gaussian(response_vec, frequencies=wbb, num_points=10)
-    
-    response_guess_vec = px.analysis.fit_methods.Fit_Methods()
-    response_guess_vec = response_guess_vec.SHO(coef_guess_vec, wbb)
-
-    response_guess_vec = px.be_sho.SHOfunc(coef_guess_vec, wbb)
-    response_fit_vec = px.be_sho.SHOfunc(coef_vec, wbb)
+    coef_vec = px.analysis.utils.be_sho.SHOestimateGuess(response_vec, wbb, 10)
+    response_guess_vec = px.analysis.utils.be_sho.SHOfunc(coef_guess_vec, wbb)
+    response_fit_vec = px.analysis.utils.be_sho.SHOfunc(coef_vec, wbb)
 
     # Saves the response in MHz, not used anywhere else
     coef_vec[1] = coef_vec[1]*1E6 #convert to MHz
     coef_mat[k1,:] = coef_vec
-    response_fit_full_vec = px.be_sho.SHOfunc(coef_vec,w_vec2)
+    response_fit_full_vec = px.analysis.utils.be_sho.SHOfunc(coef_vec,w_vec2)
     TF_fit_vec = TF_fit_vec + response_fit_full_vec # check for length and dimension
 
     # Plot: blue = data, green = initial guess, red = fit
@@ -411,34 +407,37 @@ tune_items = {'TF_norm':TF_norm,
               'TF_fit_vec':TF_fit_vec}     
 
 # Create dataset if not there
-nm_base = '/Measurement_000/Tune_Values'
-grp_tune = px.MicroDataGroup(nm_base, '/')
+nm_base = '/Measurement_002/Tune_Values'
+grp_tune = px.io.VirtualGroup(nm_base, '/')
 
 if nm_base in hdf.file:
     print('#### Overwriting existing data set ####')
-
+    _wd = False
 else:
     print('#### Creating new dataset:', nm_base,'####')
-    hdf.writeData(grp_tune, print_log=True)
+    hdf.write(grp_tune, print_log=True)
+    _wd = True
 
 for key in tune_items:
 
-    if key in hdf.file:
+    if key in h5_file[nm_base]:
         print('==== Overwriting', key,'====')
-        grp_name = hdf.file[key][0]
+        grp_name = h5_file[nm_base][key][0]
         tune_items[key] = grp_name
 
     else:    
         print('==== Creating', key,'====')
-        grp_item = px.MicroDataset(key, data=tune_items[key], parent = '/')
-        grp_tune.addChildren([grp_item])
+        grp_item = px.io.VirtualDataset(key, data=tune_items[key], parent = '/')
+        grp_tune.add_children([grp_item])
 
 grp_tune.attrs['Q'] = Q
 for p in cantl_parms:
     grp_tune.attrs[p] = cantl_parms[p]
-hdf.writeData(grp_tune, print_log=True)
+    
+if _wd:
+    hdf.write(grp_tune, print_log=True)
         
-hdf.flush()
+#hdf.flush()
 
 #%% Separate close file to allow debugging without errors
 hdf.close()
