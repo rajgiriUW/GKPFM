@@ -766,7 +766,7 @@ This segment does two things:
 
 # Phase Offset
 ph = -3.3 + np.pi   # phase from cable delays between excitation and response
-ph = 2.8
+ph = 2.825
 search_phase = False # whether to brute force find the best phase
 
 # Calculates NoiseLimit
@@ -952,7 +952,7 @@ if save_figure == True:
     fig.savefig(output_filepath+r'\PCARaw_Loading.tif', format='tiff')
 
 #%% PCA_Clean prior to F3R Reconstruction?
-PCA_pre_reconstruction_clean = True
+PCA_pre_reconstruction_clean = False
 
 # Filters out the components specified from h5_resh (the reshaped h5 data)
 if PCA_pre_reconstruction_clean == True:
@@ -1096,7 +1096,7 @@ print('Data was reshaped from shape', h5_F3R.shape,
       'reshaped to ', h5_F3Rresh.shape)
 
 raw = np.reshape(h5_F3Rresh, [-1, pixel_ex_wfm.size])
-fig, axes = px.plot_utils.plot_durve(pixel_ex_wfm, raw[128:256],use_rainbow_plots=True, 
+fig, axes = px.plot_utils.plot_curves(pixel_ex_wfm, raw[128:256],use_rainbow_plots=True, 
                                      x_label='Voltage (Vac)', title='Raw',
                                      num_plots=4, y_label='Deflection (a.u.)')
 
@@ -1167,7 +1167,7 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,1,4,5,6,7]) ##Components you want to keep
+    clean_components = np.array([0,1,2,3,4,5,6,7,8,9,10,11]) ##Components you want to keep
     #num_components = len(clean_components)
     
     # checks for existing SVD
@@ -1216,7 +1216,7 @@ print('Time resolution:',pxl_time/pnts_per_CPDpix)
 tx = np.linspace(0, pxl_time, pnts_per_CPDpix) 
 
 deg = 2
-row = 4*num_cols+14  #random sample pixel
+row = 3*num_cols+14  #random sample pixel
 
 p = 3 #random oscillation in that pixel
 # note k4 cannot exceed Npoints_per_pixel/periods, obviously
@@ -1229,7 +1229,7 @@ if PCA_post_reconstruction_clean == False:
     print('Not post-filtered')
     resp = h5_F3Rresh[row][pnts_per_CPDpix*p:pnts_per_CPDpix*(p+1)]
 else:
-    resp = PCA_clean_data_postrecon[row][pnts_per_CPDpix*p:pnts_per_CPDpix*(p+1)]
+    resp = np.float32(PCA_clean_data_postrecon[row][pnts_per_CPDpix*p:pnts_per_CPDpix*(p+1)])
 
 resp=resp-np.mean(resp)
 V_per_osc=pixel_ex_wfm[pnts_per_CPDpix*p:pnts_per_CPDpix*(p+1)]
@@ -1244,7 +1244,7 @@ plt.plot(V_per_osc,y1, 'g')
 
 test_wH = np.zeros((pnts_per_CPDpix, deg+1))
 
-rows = [4*num_cols+14, 44*num_cols+16, 32*num_cols+67]  
+rows = [1*num_cols+14, 44*num_cols+16, 32*num_cols+67]  
 fig,a = plt.subplots(nrows=1, figsize=(8,6))
 a.set_xlabel('Time (s)')
 
@@ -1271,7 +1271,7 @@ for row in rows:
         if PCA_post_reconstruction_clean == False:
             resp = h5_F3Rresh[row][decimation*p:decimation*(p+1)]
         else:
-            resp = PCA_clean_data_postrecon[row][decimation*p:decimation*(p+1)]
+            resp = np.float32(PCA_clean_data_postrecon[row][decimation*p:decimation*(p+1)])
                 
         resp = (resp-np.mean(resp))
         V_per_osc = pixel_ex_wfm[decimation*p:decimation*(p+1)]
@@ -1283,7 +1283,7 @@ for row in rows:
         if PCA_post_reconstruction_clean == False:
             resp = h5_F3Rresh[row][(pnts_per_CPDpix-1)*decimation:]
         else:
-            resp = PCA_clean_data_postrecon[row][(pnts_per_CPDpix-1)*decimation:]            
+            resp = np.float32(PCA_clean_data_postrecon[row][(pnts_per_CPDpix-1)*decimation:])
        
         resp = (resp-np.mean(resp))
         V_per_osc = pixel_ex_wfm[(pnts_per_CPDpix-1)*decimation:]
@@ -1346,9 +1346,9 @@ for n in range((num_rows*num_cols)):
     for p in range(pnts_per_CPDpix-min(1,remainder)): 
 
         if PCA_post_reconstruction_clean == False:
-            resp = h5_F3Rresh[n][decimation*p:decimation*(p+1)]
+            resp = np.float32(h5_F3Rresh[n][decimation*p:decimation*(p+1)])
         else:
-            resp = PCA_clean_data_postrecon[n][decimation*p:decimation*(p+1)]
+            resp = np.float32(PCA_clean_data_postrecon[n][decimation*p:decimation*(p+1)])
                 
         resp = resp-np.mean(resp)
         V_per_osc = pixel_ex_wfm[decimation*p:decimation*(p+1)]
@@ -1358,9 +1358,9 @@ for n in range((num_rows*num_cols)):
     # if using complete periods approach, then last point will be cycle+leftover
     if remainder > 0:
         if PCA_post_reconstruction_clean == False:
-            resp = h5_F3Rresh[n][(pnts_per_CPDpix-1)*decimation:]
+            resp = np.float32(h5_F3Rresh[n][(pnts_per_CPDpix-1)*decimation:])
         else:
-            resp = PCA_clean_data_postrecon[n][(pnts_per_CPDpix-1)*decimation:]            
+            resp = np.float32(PCA_clean_data_postrecon[n][(pnts_per_CPDpix-1)*decimation:])
        
         resp = (resp-np.mean(resp))
         V_per_osc = pixel_ex_wfm[(pnts_per_CPDpix-1)*decimation:]
@@ -1616,7 +1616,7 @@ else:
 grp_name = h5_main.name.split('/')[-1] + '-CPD'
 grp_CPD = px.io.VirtualGroup(grp_name, h5_main.parent.name + '/')
 
-px.hdf_utils.write_main_dataset(grp_CPD,CPD)
+#px.hdf_utils.write_main_dataset(grp_CPD,CPD)
 
 try: 
     CPD_exists = h5_main.parent.name + '/' + grp_CPD.name + '/' + 'CPD_on_time'
@@ -1764,7 +1764,7 @@ if save_figure == True:
 # 1e3 to put in mV
 fig, a = plt.subplots(nrows=1, figsize=(13, 3))
 _, cbar = px.plot_utils.plot_map(a, SPV*1e3, cmap='inferno', aspect=aspect, 
-                       x_size=img_length*1e6, y_size=img_height*1e6, stdevs = 2,
+                       x_vec=xv, y_vec=yv, stdevs = 2,
                        cbar_label='SPV (mV)')
 cbar.set_label('SPV (mV)', rotation=270, labelpad=16)
 a.set_title('SPV (mV)', fontsize=12)
@@ -1819,7 +1819,7 @@ linecoords = np.arange(rpts[0]*num_cols + cpts[0], rpts[0]*num_cols + cpts[1])
 
 fig, a = plt.subplots(nrows=2, figsize=(13, 10), facecolor='white')
 im0 = px.plot_utils.plot_map(a[0], CPD_on_avg*1e3, cmap='inferno', origin='lower', aspect=0.5,
-                             x_size=img_length*1e6, y_size= img_height*1e6, num_ticks=9,
+                             x_vec=xv, y_vec=yv, num_ticks=9,
                              cbar_label='CPV (mV)')
 
 time = np.linspace(0.0, pxl_time, CPD.shape[1])
