@@ -93,7 +93,7 @@ button_layout=dict(
 
 import os
 
-output_filepath = r'E:\ORNL\20191219_BAPI\BAPI5_TUNE__0001'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_TUNE__0009'
 save_figure = True
 
 output_filepath = os.path.expanduser(output_filepath)
@@ -451,7 +451,7 @@ hdf.close()
 from pathlib import Path
 
 # Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191219_BAPI\BAPI7_700mA_4ms__0002'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_2ms_700mA__0009'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
 
@@ -765,7 +765,7 @@ This segment does two things:
 # Try Force Conversion on Filtered data
 
 # Phase Offset
-ph = -4.9# + np.pi   # phase from cable delays between excitation and response
+ph = -0.5*np.pi# + np.pi   # phase from cable delays between excitation and response
 search_phase = False # whether to brute force find the best phase
 
 # Calculates NoiseLimit
@@ -809,7 +809,7 @@ fig, axes = px.plot_utils.plot_curves(pixel_ex_wfm, phaseshifted, use_rainbow_pl
 # iteratively find the phase
 if search_phase == True:
     fits = []
-    xpts = np.arange(-2*np.pi, 0*np.pi, 0.1)
+    xpts = np.arange(-2*np.pi, 2*np.pi, 0.1)
     for i in xpts:
         
         test_shifted = (test_line)*np.exp(-1j*w_vec2/(w_vec2[ind_drive])*i)
