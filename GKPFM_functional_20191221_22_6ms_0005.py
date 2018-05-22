@@ -51,6 +51,7 @@ import matplotlib.pyplot as plt
 # General utilities:
 import os
 import sys
+import wget
 from scipy.signal import correlate
 from scipy.optimize import curve_fit
 
@@ -393,52 +394,6 @@ Q = coef_mat[0,2]
 TF_norm = ((TF_fit_vec- np.min(np.abs(TF_fit_vec)))/ np.max(np.abs(TF_fit_vec))-
            np.min(np.abs(TF_fit_vec))) * Q
 
-#%% Saves data to the h5 File
-'''
-Need to save cantilever parameters, TF_nom, Q, yt0_tune, Yt0, f0, F0, TF_vec
-
-'''
-tune_items = {'TF_norm':TF_norm, 
-              'yt0_tune':yt0_tune, 
-              'Yt0_tune':Yt0_tune, 
-              'f0':f0, 
-              'F0':F0, 
-              'TF_vec':TF_vec,
-              'TF_fit_vec':TF_fit_vec}     
-
-# Create dataset if not there
-nm_base = '/Measurement_002/Tune_Values'
-grp_tune = px.io.VirtualGroup(nm_base, '/')
-
-if nm_base in hdf.file:
-    print('#### Overwriting existing data set ####')
-    _wd = False
-else:
-    print('#### Creating new dataset:', nm_base,'####')
-    hdf.write(grp_tune, print_log=True)
-    _wd = True
-
-for key in tune_items:
-
-    if key in h5_file[nm_base]:
-        print('==== Overwriting', key,'====')
-        grp_name = h5_file[nm_base][key][0]
-        tune_items[key] = grp_name
-
-    else:    
-        print('==== Creating', key,'====')
-        grp_item = px.io.VirtualDataset(key, data=tune_items[key], parent = '/')
-        grp_tune.add_children([grp_item])
-
-grp_tune.attrs['Q'] = Q
-for p in cantl_parms:
-    grp_tune.attrs[p] = cantl_parms[p]
-    
-if _wd:
-    hdf.write(grp_tune, print_log=True)
-        
-#hdf.flush()
-
 #%% Separate close file to allow debugging without errors
 hdf.close()
 
@@ -449,62 +404,41 @@ hdf.close()
 #Step 2A) Load and Translates image file to .H5 file format
 
 from pathlib import Path
+from gDrive_Downloader import download_file_from_google_drive as dl_gDrive
 
-# Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_4ms_700mA__0007'
-save_figure = True
-output_filepath = os.path.expanduser(output_filepath)
-
+# hard-coded parameters for this dataset
 img_length = 32e-6
 img_height = 8e-6
+aspect = 0.5 
+light_on_time = [1, 5] #hard-coded for this set
+g_id = '1O-KjqfI-VAz1BGFzRRcNdcFUJmGVJELP'  # this is hard-coded, don't change
+data_file_path = r'E:\Users\Raj\BAPI20_4ms_700mA_0007.h5' # change this to a local filename
 
-aspect = 0.5 # due to G-mode approach
-
-print('#### IMAGE LENGTH =',img_length,'####')
-
-pre_load_files = False
-if pre_load_files is False:
-    input_file_path = px.io_utils.file_dialog(caption='Select translated .h5 file or raw experiment data',
-                                            file_filter='Parameters for raw G-Line data (*.dat);; \
-                                            Translated file (*.h5)')
-else:
-    input_file_path = data_file
-    
-folder_path, _ = os.path.split(input_file_path)
-
-# To avoid accidental overwrites
-if folder_path.replace('/','\\') != output_filepath:
-    raise(FileExistsError)
-
-if input_file_path.endswith('.dat'):
-    file = Path(input_file_path[:-15]+'.h5')
-    if file.is_file():
+# If you already have the file, set this to False
+download_file = True
+overwrite_file = False #user-protection
+if download_file:
+    file = Path(data_file_path)
+    if file.is_file() and overwrite_file==False:
         print('Cannot unintentionally overwrite H5 file')
         raise ReferenceError
-    else:
-        print('Translating raw data to h5. Please wait')
-        tran = px.io.translators.gmode_line.GLineTranslator()
-        h5_path = tran.translate(input_file_path)
-        hdf = px.io.HDFwriter(h5_path)
-        preLoaded = False
+    
+    print('Warning! This takes a long time (>10 minutes)!')
+    dl_gDrive(g_id, data_file_path )
+    
 else:
-    h5_path = input_file_path
-    hdf = px.io.HDFwriter(h5_path)
-    px.hdf_utils.print_tree(hdf.file, rel_paths=True)
-    preLoaded = True #for pre-loading some data
-    
-# to automatically set light_on times
-a = output_filepath.find('ms')
-b = output_filepath.find('us')
-if a != -1:
-    tm = int(output_filepath[a-1])
-    light_on_time = [1, 1+tm]  # ms   
-elif b != -1:
-    tm = int(output_filepath[b-3:b])
-    light_on_time = [1, 1+tm/1000]  # ms
-del(a)
-del(b)
-    
+    data_file_path = px.io_utils.file_dialog(caption='Select translated .h5 file',
+                                        file_filter='Translated file (*.h5)')
+
+save_figure = True
+output_filepath = os.path.expanduser(data_file_path)
+
+# Load into workspace
+h5_path = data_file_path
+hdf = px.io.HDFwriter(h5_path)
+px.hdf_utils.print_tree(hdf.file, rel_paths=True)
+preLoaded = True #for pre-loading some data
+
 #%% Step 2A.i) Extract some relevant parameters
 
 # Getting ancillary information and other parameters
@@ -538,8 +472,12 @@ pnts_per_period = IO_rate * time_per_osc #points per oscillation period
 pxl_time = N_points_per_pixel/IO_rate    #seconds per pixel
 num_periods = int(pxl_time/time_per_osc) #total # of periods per pixel, should be an integer
 
+parms_dict['total_time'] = pxl_time
+parms_dict['trigger'] = 0
 parms_dict['length'] = img_length
 parms_dict['height'] = img_height
+
+parms_dict['light_on_time'] = light_on_time
 
 grp_CPD = px.io.VirtualGroup(h5_main.parent.parent.name)
 grp_CPD.attrs['length'] = img_length
@@ -729,7 +667,7 @@ nbf = px.processing.fft.NoiseBandFilter(num_pts, samp_rate,
 #                                        [1E3, 1E3, 1.5E3])
 
 freq_filts = [lpf, nbf]
-noise_tolerance = 10e-6
+noise_tolerance = 8e-6
 
 narrowband = False
 if narrowband == True:
@@ -765,7 +703,8 @@ This segment does two things:
 # Try Force Conversion on Filtered data
 
 # Phase Offset
-ph = -3.48# + np.pi   # phase from cable delays between excitation and response
+ph = -0.5*np.pi# + np.pi   # phase from cable delays between excitation and response
+ph = 6.017-np.pi
 search_phase = False # whether to brute force find the best phase
 
 # Calculates NoiseLimit
@@ -918,6 +857,7 @@ plt.plot(skree_sum, 'o')
 print('Need', skree_sum[skree_sum<0.8].shape[0],'components for 80%')
 print('Need', skree_sum[skree_sum<0.9].shape[0],'components for 90%')
 print('Need', skree_sum[skree_sum<0.95].shape[0],'components for 95%')
+print('Need', skree_sum[skree_sum<0.99].shape[0],'components for 99%')
 
 # Since the two spatial dimensions (x, y) have been collapsed to one, we need to reshape the abundance maps:
 # The "25" is how many of the eigenvectors to keep
@@ -927,7 +867,6 @@ abun_maps = np.reshape(h5_Uprecon[:,:25], (num_rows, num_cols,-1))
 fig, axes =px.plot_utils.plot_scree(h5_Sprecon, title='Skree plot')
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\PCARaw_Skree.eps', format='eps')
     fig.savefig(output_filepath+'\PCARaw_Skree.tif', format='tiff')
 
 # Visualize the eigenvectors; 
@@ -939,7 +878,6 @@ fig, axes =px.plot_utils.plot_curves(pixel_ex_wfm, first_evecs, use_rainbow_plot
                                     title='SVD Eigenvectors (F3R)', evenly_spaced=False)
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\PCARaw_Eig.eps', format='eps')
     fig.savefig(output_filepath+'\PCARaw_Eig.tif', format='tiff')
 
 # Visualize the abundance maps:
@@ -947,17 +885,16 @@ fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, title='SVD Abund
                                         color_bar_mode='single', cmap='inferno', reverse_dims=True)
 
 if save_figure == True:
-    fig.savefig(output_filepath+r'\PCARaw_Loading.eps', format='eps')
     fig.savefig(output_filepath+r'\PCARaw_Loading.tif', format='tiff')
 
 #%% PCA_Clean prior to F3R Reconstruction?
-PCA_pre_reconstruction_clean = True
+PCA_pre_reconstruction_clean = False
 
 # Filters out the components specified from h5_resh (the reshaped h5 data)
 if PCA_pre_reconstruction_clean == True:
     
     # important! If choosing components, min is 3 or interprets as start/stop range of slice
-    clean_components = np.array([0,1,4,5,6,7,8]) # np.append(range(5,9),(17,18))
+    clean_components = np.array([0,1,2,3,4,5,6,7,8]) # np.append(range(5,9),(17,18))
 
     # checks for existing SVD
     itms = [i for i in h5_resh.parent.items()]
@@ -1047,10 +984,8 @@ px.plot_utils.set_tick_font_size(ax, 14)
 
 if save_figure == True:
     if PCA_pre_reconstruction_clean == False:
-        fig.savefig(output_filepath+r'\Noise_Spectra_noprePCA.eps', format='eps')
         fig.savefig(output_filepath+r'\Noise_Spectra_noprePCA.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+r'\Noise_Spectra_prePCA.eps', format='eps')
         fig.savefig(output_filepath+r'\Noise_Spectra_prePCA.tif', format='tiff')        
 
 phaseshifted = G_time[i].reshape(-1, pixel_ex_wfm.size)
@@ -1061,7 +996,7 @@ fig, axes = px.plot_utils.plot_curves(pixel_ex_wfm, phaseshifted, use_rainbow_pl
 if PCA_pre_reconstruction_clean == False:
     fig.savefig(output_filepath+r'\PostFilter_Displacement_noprePCA.tif', format='tiff')
 else:
-    fig.savefig(output_filepath+r'\PostFilter_Displacement_prePCA_['+str(clean_components)+'].tif', format='tiff')
+    fig.savefig(output_filepath+r'\PostFilter_Displacement_prePCA.tif', format='tiff')
 
 #%% Reshaping and Storing  Results
 
@@ -1144,10 +1079,8 @@ fig, axes =px.plot_utils.plot_curves(pixel_ex_wfm, first_evecs, x_label='Voltage
 
 if save_figure == True:
     if PCA_pre_reconstruction_clean == False:
-        fig.savefig(output_filepath+'\PCAF3R_Eig_noPrePCA.eps', format='eps')
         fig.savefig(output_filepath+'\PCF3R_Eig_noPrePCA.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\PCAF3R_Eig_withPrePCA.eps', format='eps')
         fig.savefig(output_filepath+'\PCF3R_Eig_withPrePCA.tif', format='tiff')
 
 # Visualize the abundance maps:
@@ -1155,10 +1088,8 @@ fig, axes =px.plot_utils.plot_map_stack(abun_maps_postfilter, num_comps=25, titl
                              color_bar_mode='single', cmap='inferno', reverse_dims=True)
 if save_figure == True:
     if PCA_pre_reconstruction_clean == False:
-        fig.savefig(output_filepath+'\PCAF3R_Loadings_noPrePCA.eps', format='eps')
         fig.savefig(output_filepath+'\PCF3R_Loadings_noPrePCA.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\PCAF3R_Loadings_withPrePCA.eps', format='eps')
         fig.savefig(output_filepath+'\PCF3R_Loadings_withPrePCA.tif', format='tiff')
 
 
@@ -1166,7 +1097,7 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,1,2]) ##Components you want to keep
+    clean_components = np.array([0,1,2,3,16,17,18]) ##Components you want to keep
     #num_components = len(clean_components)
     
     # checks for existing SVD
@@ -1636,12 +1567,15 @@ except:
     ds_CPDon = px.io.VirtualDataset('CPD_on_time', data=CPD_on_time, parent = h5_CPD.parent)
     ds_CPDoff = px.io.VirtualDataset('CPD_off_time', data=CPD_off_time, parent = h5_CPD.parent)
     ds_SPV = px.io.VirtualDataset('SPV', data=SPV, parent= h5_CPD.parent)
+    ds_CPD_off_avg = px.io.VirtualDataset('CPD_off_avg', data=SPV, parent= h5_CPD.parent)
+    ds_CPD_on_avg = px.io.VirtualDataset('CPD_on_avg', data=SPV, parent= h5_CPD.parent)
     grp_CPD.add_children([ds_CPDon])
     grp_CPD.add_children([ds_CPDoff])
     grp_CPD.add_children([ds_SPV])
+    grp_CPD.add_children([ds_CPD_off_avg])
+    grp_CPD.add_children([ds_CPD_on_avg])
     grp_CPD.attrs['pulse_time'] = [light_on_time[0], light_on_time[1]]
     hdf.write(grp_CPD, print_log=True)
-    px.hdf_utils.write_ind_val_dsets
 
 # Creates ancillary datasets
 #from ffta.utils import hdf_utils
@@ -1676,7 +1610,7 @@ a[1].set_title('CPD On Average', fontsize=12)
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
         fig.savefig(output_filepath+'\CPDon_vs_off_PCApost.eps', format='eps')
-        fig.savefig(output_filepath+'\CPDon_vs_off_PCApost_'+str(clean_components)+'.tif', format='tiff')
+        fig.savefig(output_filepath+'\CPDon_vs_off_PCApost.tif', format='tiff')
     else:
         fig.savefig(output_filepath+'\CPDon_vs_off_noPCApost.eps', format='eps')
         fig.savefig(output_filepath+'\CPDon_vs_off_noPCApost.tif', format='tiff')
@@ -1714,7 +1648,7 @@ if save_figure == True:
     if PCA_post_reconstruction_clean == True:
         fig.savefig(output_filepath+'\CPD_times_noPCA.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\CPD_times_PCA_'+str(clean_components)+'.tif', format='tiff')
+        fig.savefig(output_filepath+'\CPD_times_PCA.tif', format='tiff')
 
 fig, a = plt.subplots(nrows=1, figsize=(13, 3))
 
@@ -1726,7 +1660,7 @@ a.set_title('CPD Off Time', fontsize=12)
 
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
-        fig.savefig(output_filepath+'\CPDoff_times_PCA-Alone_'+str(clean_components)+'.tif', format='tiff')
+        fig.savefig(output_filepath+'\CPDoff_times_PCA-Alone.tif', format='tiff')
     else:
         fig.savefig(output_filepath+'\CPDoff_times_noPCA-Alone.tif', format='tiff')    
 
@@ -1734,26 +1668,26 @@ if save_figure == True:
 fig, a = plt.subplots(nrows=1, figsize=(13, 3))
 _, cbar = px.plot_utils.plot_map(a, CPD_on_time*1e3, cmap='inferno', aspect=aspect, 
                        x_vec=xv, y_vec = yv, stdevs = 2,
-                       cbar_label='Time Constant (ms)')
+                       cbar_label='Time Constant (ms)', vmin=0.1, vmax = .9)
 cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 a.set_title('CPD On Time', fontsize=12)
 
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
-        fig.savefig(output_filepath+'\CPDon_times_PCA-Alone_'+str(clean_components)+'.tif', format='tiff')
+        fig.savefig(output_filepath+'\CPDon_times_PCA-Alone.tif', format='tiff')
     else:
         fig.savefig(output_filepath+'\CPDon_times_noPCA-Alone.tif', format='tiff')    
         
-#fig, a = plt.subplots(nrows=1, figsize=(13, 3))
-#_, cbar = px.plot_utils.plot_map(a, CPD_grad_resh_on_avg, cmap='inferno', aspect=aspect, 
-#                       x_vec=xv, y_vec = yv, stdevs = 2,
-#                       cbar_label='Gradient (a.u.)')
-#cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
-#a.set_title('Capacitive Gradient', fontsize=12)
+fig, a = plt.subplots(nrows=1, figsize=(13, 3))
+_, cbar = px.plot_utils.plot_map(a, CPD_grad_resh_on_avg, cmap='inferno', aspect=aspect, 
+                       x_vec=xv, y_vec = yv, stdevs = 2,
+                       cbar_label='Gradient (a.u.)')
+cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
+a.set_title('Capacitive Gradient', fontsize=12)
 
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
-        fig.savefig(output_filepath+'\CPD_gradient_PCA-Alone_'+str(clean_components)+'.tif', format='tiff')
+        fig.savefig(output_filepath+'\CPD_gradient_PCA-Alone.tif', format='tiff')
     else:
         fig.savefig(output_filepath+'\CPD_gradient_noPCA-Alone.tif', format='tiff')    
         
@@ -1770,10 +1704,8 @@ a.set_title('SPV (mV)', fontsize=12)
 
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
-        fig.savefig(output_filepath+'\SPV_PCApost.eps', format='eps')
-        fig.savefig(output_filepath+'\SPV_PCApost_'+str(clean_components)+'.tif', format='tiff')
+        fig.savefig(output_filepath+'\SPV_PCApost.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\SPV_noPCApost.eps', format='eps')
         fig.savefig(output_filepath+'\SPV_noPCApost.tif', format='tiff')
 
 
@@ -1894,8 +1826,8 @@ if save_figure == True:
 # Visualize the eigenvectors:
 first_evecs = V[:9, :]
 
-fig, axes =px.plot_utils.plot_loops(time_on*1E+3, first_evecs, x_label='Time (ms)', 
-                                    y_label='CPD Eig (a.u.)', plots_on_side=3,
+fig, axes =px.plot_utils.plot_curves(time_on*1E+3, first_evecs, x_label='Time (ms)', 
+                                    y_label='CPD Eig (a.u.)', num_plots=9,
                                     subtitle_prefix='Component', title='SVD Eigenvectors (F3R)',
                                     evenly_spaced=False)
 
@@ -1928,8 +1860,8 @@ if save_figure == True:
 # Visualize the eigenvectors:
 first_evecs = V[:9, :]
 
-fig, axes =px.plot_utils.plot_loops(time_off*1E+3, first_evecs, x_label='Time (ms)', 
-                                    y_label='CPD Eig (a.u.)', plots_on_side=3,
+fig, axes =px.plot_utils.plot_curves(time_off*1E+3, first_evecs, x_label='Time (ms)', 
+                                    y_label='CPD Eig (a.u.)', num_plots=9,
                                     subtitle_prefix='Component', title='SVD Eigenvectors (F3R)',
                                     evenly_spaced=False)
 if save_figure == True:
@@ -1972,8 +1904,10 @@ if save_figure == True:
 # Visualize the eigenvectors:
 first_evecs = V[:6, :]
 
-fig, axes =px.plot_utils.plot_loops(time[:-1]*1E+3, first_evecs, x_label='Time (ms)', y_label='CPD Eig (a.u.)', plots_on_side=3,
-                         subtitle_prefix='Component', title='SVD Eigenvectors (F3R)', evenly_spaced=False)
+fig, axes =px.plot_utils.plot_curves(time[:-1]*1E+3, first_evecs, x_label='Time (ms)', 
+                                     y_label='CPD Eig (a.u.)', num_plots=9,
+                                     subtitle_prefix='Component', title='SVD Eigenvectors (F3R)', 
+                                     evenly_spaced=False)
 
 if save_figure == True:
     fig.savefig(output_filepath+'\CPDtotal_Eig.eps', format='eps')
@@ -2047,7 +1981,7 @@ for k in timeslice:
 # note shape of CPD is 64x128, not 128x64
 
 #in length units, in microns here
-cptslabels = [12, 16] #column points, row points
+cptslabels = [8, 12] #column points, row points
 rptslabels = [3.8  , 3.8]
 
 cpts = [int(i) for i in np.array(cptslabels) * (1e-6/ img_length) * num_cols]
@@ -2231,20 +2165,34 @@ fig.savefig(output_filepath+'\CPD_composite_'+length_labels+'_newNorms_legend.ti
 
 #%% k-means clustering
 
-from ffta.utils import distance_utils, mask_utils
+from ffta.utils import dist_cluster, mask_utils
 
-clusters=3
+clusters=5
 
 img_length = parms_dict['FastScanSize']
 img_height = parms_dict['SlowScanSize']
 group = h5_main.name + '-CPD'
 
-mask = mask_utils.load_mask_txt('E:/ORNL/20191219_BAPI/BaPI_5_400mA_3V_Mask.txt', flip=False)
-CPD_clust = distance_utils.CPD_cluster(h5_main.file,ds_group = group, mask=mask, 
-                                       imgsize=[img_length, img_height], light_on=light_on_time)
+mask = mask_utils.load_mask_txt('E:/ORNL/20191221_BAPI/MASK_BAPI22_0006.txt', flip=False)
+#CPD_clust = distance_utils.CPD_cluster(h5_main.file,ds_group = group, mask=mask, 
+#                                       imgsize=[img_length, img_height], light_on=light_on_time)
 
-CPD_clust.analyze_CPD(CPD_clust.CPD_on_avg)
-_, _, fig = CPD_clust.kmeans(CPD_clust.CPD_scatter, show_results=True,clusters=clusters)
+CPD_file = h5_file['Measurement_000/Channel_000/CPD_005/CPD']
+
+for k in parms_dict:
+    CPD_file.parent.attrs[k] = parms_dict[k]
+    CPD_file.parent.attrs['trigger'] = 0 # since kmeans designed for fftrEFM code, this is a fake flag
+
+CPD_clust = dist_cluster.dist_cluster(CPD_file,data_avg='CPD_on_avg', mask=mask, isCPD=True) 
+#                                       imgsize=[img_length, img_height], light_on=light_on_time)
+CPD_clust.analyze()
+#_, _, fig = CPD_clust.kmeans(CPD_clust.CPD_scatter, show_results=True,clusters=clusters)
+CPD_clust.kmeans(clusters=clusters)
+fig, ax = CPD_clust.plot_img()
+if save_figure == True:
+    fig.savefig(output_filepath+'\masked_image-'+'.tif', format='tiff')
+
+CPD_clust.plot_kmeans()
 if save_figure == True:
     fig.savefig(output_filepath+'\k_means_vs_grain_distance_numclusters-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
 
@@ -2253,16 +2201,16 @@ if save_figure == True:
     fig.savefig(output_filepath+'\k_means_vs_grain_distance_heat_map_numclusters-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
 
 CPD_clust.segment_maps()
-
-fig, a = plt.subplots(nrows=1, figsize=(12,6))
-px.plot_utils.plot_map(a, CPD_on_avg, x_size=img_length*1e6, y_size=img_height*1e6, 
-                       aspect=aspect, cmap='inferno')
-px.plot_utils.plot_map(a, CPD_clust.mask_nan, x_size=img_length*1e6, y_size=img_height*1e6, 
-                       aspect=0.5, cmap='hot', show_cbar=False)
-CPD_clust.plot_segment_maps(a)
+CPD_clust.plot_segment_maps(ax)
 
 if save_figure == True:
     fig.savefig(output_filepath+'\clustered_CPD-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
+
+fig, ax = CPD_clust.plot_centers()
+ax.set_ylabel('CPD (V)')
+ax.set_xlabel('Time (s)')
+if save_figure == True:
+    fig.savefig(output_filepath+'\CPD_cluster_centers-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
 
 
     #%% 
