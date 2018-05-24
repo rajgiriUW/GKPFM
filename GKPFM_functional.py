@@ -451,13 +451,12 @@ hdf.close()
 from pathlib import Path
 
 # Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI20_4ms_700mA__0007'
+output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_2ms_700mA__0009'
 save_figure = True
 output_filepath = os.path.expanduser(output_filepath)
 
 img_length = 32e-6
 img_height = 8e-6
-
 aspect = 0.5 # due to G-mode approach
 
 print('#### IMAGE LENGTH =',img_length,'####')
@@ -765,7 +764,7 @@ This segment does two things:
 # Try Force Conversion on Filtered data
 
 # Phase Offset
-ph = -3.48# + np.pi   # phase from cable delays between excitation and response
+ph = 9.2   # phase from cable delays between excitation and response
 search_phase = False # whether to brute force find the best phase
 
 # Calculates NoiseLimit
@@ -867,7 +866,6 @@ fig, axes = px.plot_utils.plot_curves(pixel_ex_wfm, phaseshifted, use_rainbow_pl
 
 fig.savefig(output_filepath+r'\PostFilter_Displacements.tif', format='tiff')
 
-
 #%% Filter the full data set; this process is quite slow
 
 h5_filt_grp = px.hdf_utils.check_for_old(h5_main, 'FFT_Filtering')#, new_parms=filter_parms)
@@ -951,13 +949,13 @@ if save_figure == True:
     fig.savefig(output_filepath+r'\PCARaw_Loading.tif', format='tiff')
 
 #%% PCA_Clean prior to F3R Reconstruction?
-PCA_pre_reconstruction_clean = True
+PCA_pre_reconstruction_clean = False
 
 # Filters out the components specified from h5_resh (the reshaped h5 data)
 if PCA_pre_reconstruction_clean == True:
     
     # important! If choosing components, min is 3 or interprets as start/stop range of slice
-    clean_components = np.array([0,1,4,5,6,7,8]) # np.append(range(5,9),(17,18))
+    clean_components = np.array([0,1,3,4,5]) # np.append(range(5,9),(17,18))
 
     # checks for existing SVD
     itms = [i for i in h5_resh.parent.items()]
@@ -1117,10 +1115,8 @@ fig, axes =px.plot_utils.plot_scree(h5_S, title='Skree plot')
 
 if save_figure == True:
     if PCA_pre_reconstruction_clean == False:
-        fig.savefig(output_filepath+'\PCAF3R_Skree_noPrePCA.eps', format='eps')
         fig.savefig(output_filepath+'\PCF3R_Skree_noPrePCa.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\PCAF3R_Skree_withPrePCA.eps', format='eps')
         fig.savefig(output_filepath+'\PCF3R_Skree_withPrePCA.tif', format='tiff')
 
 skree_sum = np.zeros(h5_S.shape)
@@ -1166,7 +1162,7 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,1,2]) ##Components you want to keep
+    clean_components = np.array([0,10]) ##Components you want to keep
     #num_components = len(clean_components)
     
     # checks for existing SVD
@@ -2231,39 +2227,63 @@ fig.savefig(output_filepath+'\CPD_composite_'+length_labels+'_newNorms_legend.ti
 
 #%% k-means clustering
 
-from ffta.utils import distance_utils, mask_utils
+from ffta.utils import dist_cluster, mask_utils
+import badpixels
 
-clusters=3
+clusters=5
 
 img_length = parms_dict['FastScanSize']
 img_height = parms_dict['SlowScanSize']
 group = h5_main.name + '-CPD'
 
-mask = mask_utils.load_mask_txt('E:/ORNL/20191219_BAPI/BaPI_5_400mA_3V_Mask.txt', flip=False)
-CPD_clust = distance_utils.CPD_cluster(h5_main.file,ds_group = group, mask=mask, 
-                                       imgsize=[img_length, img_height], light_on=light_on_time)
+mask_path = 'E:/ORNL/20191221_BAPI/nice_masks/Mask_BAPI22_0006.txt'
 
-CPD_clust.analyze_CPD(CPD_clust.CPD_on_avg)
-_, _, fig = CPD_clust.kmeans(CPD_clust.CPD_scatter, show_results=True,clusters=clusters)
+mask = mask_utils.load_mask_txt(mask_path, flip=False)
+
+CPD_file = px.hdf_utils.find_dataset(h5_file, 'CPD')[-1]
+if CPD_file.name.split('/')[-1] != 'CPD':
+    CPD_file = px.hdf_utils.find_dataset(CPD_file.parent, 'CPD')[0]
+
+for k in parms_dict:
+    CPD_file.parent.attrs[k] = parms_dict[k]
+    CPD_file.parent.attrs['trigger'] = 0 # since kmeans designed for fftrEFM code, this is a fake flag
+
+CPD_clust = dist_cluster.dist_cluster(CPD_file,data_avg='CPD_on_avg', mask=mask, isCPD=True) 
+#                                       imgsize=[img_length, img_height], light_on=light_on_time)
+
+# destreak image
+fa, bpl = badpixels.find_bad_pixels(CPD_clust.data_avg, 1)
+fa = badpixels.remove_bad_pixels(CPD_clust.data_avg, fa, bpl)
+CPD_clust.data_avg = fa[:,:]
+
+CPD_clust.analyze()
+#_, _, fig = CPD_clust.kmeans(CPD_clust.CPD_scatter, show_results=True,clusters=clusters)
+CPD_clust.kmeans(clusters=clusters)
+fig, ax = CPD_clust.plot_img()
+if save_figure == True:
+    fig.savefig(output_filepath+'\masked_image-'+'.tif', format='tiff')
+
+fig, _ = CPD_clust.plot_kmeans()
 if save_figure == True:
     fig.savefig(output_filepath+'\k_means_vs_grain_distance_numclusters-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
 
-CPD_clust.heat_map()
+fig, _ = CPD_clust.heat_map()
 if save_figure == True:
     fig.savefig(output_filepath+'\k_means_vs_grain_distance_heat_map_numclusters-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
 
 CPD_clust.segment_maps()
-
-fig, a = plt.subplots(nrows=1, figsize=(12,6))
-px.plot_utils.plot_map(a, CPD_on_avg, x_size=img_length*1e6, y_size=img_height*1e6, 
-                       aspect=aspect, cmap='inferno')
-px.plot_utils.plot_map(a, CPD_clust.mask_nan, x_size=img_length*1e6, y_size=img_height*1e6, 
-                       aspect=0.5, cmap='hot', show_cbar=False)
-CPD_clust.plot_segment_maps(a)
+CPD_clust.plot_segment_maps(ax)
 
 if save_figure == True:
     fig.savefig(output_filepath+'\clustered_CPD-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
 
+fig, ax = CPD_clust.plot_centers()
+ax.set_ylabel('CPD (V)')
+ax.set_xlabel('Time (s)')
+if save_figure == True:
+    fig.savefig(output_filepath+'\CPD_cluster_centers-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
+
+fig, ax = CPD_clust.plot_img()
 
     #%% 
 hdf.close()
