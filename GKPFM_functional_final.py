@@ -91,19 +91,19 @@ button_layout=dict(
 )
 #%%Change the filepath below, used for storing images
 
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_TUNE__0009'
+data_file = r'E:\ORNL\20191221_BAPI\BAPI22_TUNE__0009'
 save_figure = True
 
-#output_filepath = os.path.expanduser(output_filepath)
+#data_file = os.path.expanduser(data_file)
 
 # Avoid prompts when loading data
 pre_load_files = False
 
 if pre_load_files is True:
-    idx = output_filepath.rfind("\\")
-    data_file = os.path.join(output_filepath, output_filepath[idx+1:] + '_bigtime_00.dat')
+    idx = data_file.rfind("\\")
+    data_file = os.path.join(data_file, data_file[idx+1:] + '_bigtime_00.dat')
     
-    tune_path = os.path.abspath(output_filepath)
+    tune_path = os.path.abspath(data_file)
     tune_path = os.path.expanduser(tune_path)
     idx = tune_path.rfind("\\")
     tune_file = [os.path.join(tune_path, tune_path[idx+1:] + '.h5'),
@@ -254,12 +254,13 @@ h5_file = hdf.file
 h5_resp = px.hdf_utils.find_dataset(hdf.file, 'Raw_Data')[0]  # from tip
 h5_main = px.hdf_utils.find_dataset(hdf.file, 'Raw_Data')[-1] # chirp to tip
 
-parms_dict = h5_main.parent.parent.attrs
+parms_dict = px.hdf_utils.get_attributes(h5_main.parent.parent)
 
 ex_freq = parms_dict['BE_center_frequency_[Hz]']
 samp_rate = parms_dict['IO_rate_[Hz]']
 N_points = parms_dict['num_bins']
-N_points_per_line = parms_dict['points_per_line']
+#N_points_per_line = parms_dict['points_per_line']
+N_points_per_line = N_points * parms_dict['grid_num_cols']
 N_points_per_pixel = parms_dict['num_bins']
 
 dt = 1/samp_rate #delta-time in seconds
@@ -384,8 +385,8 @@ for k1 in range(num_bandsVal):
     plt.tight_layout(pad=0.0, w_pad=0.0, h_pad=0.0)
 
     if save_figure == True:
-        fig.savefig(output_filepath+'\SHOFitting.eps', format='eps')
-        fig.savefig(output_filepath+'\SHOFitting.tif', format='tiff')
+        fig.savefig(data_file+'\SHOFitting.eps', format='eps')
+        fig.savefig(data_file+'\SHOFitting.tif', format='tiff')
 
 Q = coef_mat[0,2]
 TF_norm = ((TF_fit_vec- np.min(np.abs(TF_fit_vec)))/ np.max(np.abs(TF_fit_vec))-
@@ -449,9 +450,9 @@ hdf.close()
 from pathlib import Path
 
 # Set save file, can comment out and use the block above as you wish
-output_filepath = r'E:\ORNL\20191221_BAPI\BAPI22_2ms_700mA__0009'
+data_file = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_100mA__0013'
 save_figure = True
-output_filepath = os.path.expanduser(output_filepath)
+data_file = os.path.expanduser(data_file)
 
 img_length = 32e-6
 img_height = 8e-6
@@ -459,7 +460,7 @@ aspect = 0.5 # due to G-mode approach
 
 print('#### IMAGE LENGTH =',img_length,'####')
 
-pre_load_files = True
+pre_load_files = False
 if pre_load_files is False:
     input_file_path = px.io_utils.file_dialog(caption='Select translated .h5 file or raw experiment data',
                                             file_filter='Parameters for raw G-Line data (*.dat);; \
@@ -470,7 +471,7 @@ else:
 folder_path, _ = os.path.split(input_file_path)
 
 # To avoid accidental overwrites
-if folder_path.replace('/','\\') != output_filepath:
+if folder_path.replace('/','\\') != data_file:
     raise(FileExistsError)
 
 if input_file_path.endswith('.dat'):
@@ -491,13 +492,13 @@ else:
     preLoaded = True #for pre-loading some data
     
 # to automatically set light_on times
-a = output_filepath.find('ms')
-b = output_filepath.find('us')
+a = input_file_path.find('ms')
+b = input_file_path.find('us')
 if a != -1:
-    tm = int(output_filepath[a-1])
+    tm = int(input_file_path[a-1])
     light_on_time = [1, 1+tm]  # ms   
 elif b != -1:
-    tm = int(output_filepath[b-3:b])
+    tm = int(input_file_path[b-3:b])
     light_on_time = [1, 1+tm/1000]  # ms
 del(a)
 del(b)
@@ -511,7 +512,7 @@ h5_spec_vals = px.hdf_utils.get_auxiliary_datasets(h5_main, aux_dset_name='Spect
 h5_spec_inds=px.hdf_utils.get_auxiliary_datasets(h5_main, aux_dset_name='Spectroscopic_Indices')[0]
 
 # General parameters
-parms_dict = h5_main.parent.parent.attrs
+parms_dict = px.hdf_utils.get_attributes(h5_main.parent.parent)
 samp_rate = parms_dict['IO_rate_[Hz]']
 ex_freq = parms_dict['BE_center_frequency_[Hz]']
 num_rows = parms_dict['grid_num_rows']
@@ -742,8 +743,8 @@ filt_line, fig_filt, axes_filt = px.processing.gmode_utils.test_filter(h5_main[r
 
 if save_figure == True:
     fig = fig_filt
-    fig.savefig(output_filepath+'\FFTFiltering.eps', format='eps')
-    fig.savefig(output_filepath+'\FFTFiltering.tif', format='tiff')
+    fig.savefig(data_file+'\FFTFiltering.eps', format='eps')
+    fig.savefig(data_file+'\FFTFiltering.tif', format='tiff')
 
 filt_row = filt_line.reshape(-1, pixel_ex_wfm.size)
 fig, axes = px.plot_utils.plot_curves(pixel_ex_wfm, filt_row,use_rainbow_plots=True, 
@@ -762,7 +763,7 @@ This segment does two things:
 # Try Force Conversion on Filtered data
 
 # Phase Offset
-ph = 9.2   # phase from cable delays between excitation and response
+ph = -.283 - np.pi   # phase from cable delays between excitation and response
 search_phase = False # whether to brute force find the best phase
 
 # Calculates NoiseLimit
@@ -862,7 +863,7 @@ fig, axes = px.plot_utils.plot_curves(pixel_ex_wfm, phaseshifted, use_rainbow_pl
                                      x_label='Voltage (Vac)', title='Phase Shifted',
                                      num_plots=4, y_label='Deflection (a.u.)')
 
-fig.savefig(output_filepath+r'\PostFilter_Displacements.tif', format='tiff')
+fig.savefig(data_file+r'\PostFilter_Displacements.tif', format='tiff')
 
 #%% Filter the full data set; this process is quite slow
 
@@ -924,8 +925,8 @@ abun_maps = np.reshape(h5_Uprecon[:,:25], (num_rows, num_cols,-1))
 fig, axes =px.plot_utils.plot_scree(h5_Sprecon, title='Skree plot')
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\PCARaw_Skree.eps', format='eps')
-    fig.savefig(output_filepath+'\PCARaw_Skree.tif', format='tiff')
+    fig.savefig(data_file+'\PCARaw_Skree.eps', format='eps')
+    fig.savefig(data_file+'\PCARaw_Skree.tif', format='tiff')
 
 # Visualize the eigenvectors; 
 first_evecs = h5_Vprecon[:9, :]
@@ -936,25 +937,25 @@ fig, axes =px.plot_utils.plot_curves(pixel_ex_wfm, first_evecs, use_rainbow_plot
                                     title='SVD Eigenvectors (F3R)', evenly_spaced=False)
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\PCARaw_Eig.eps', format='eps')
-    fig.savefig(output_filepath+'\PCARaw_Eig.tif', format='tiff')
+    fig.savefig(data_file+'\PCARaw_Eig.eps', format='eps')
+    fig.savefig(data_file+'\PCARaw_Eig.tif', format='tiff')
 
 # Visualize the abundance maps:
 fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, title='SVD Abundance Maps',
                                         color_bar_mode='single', cmap='inferno', reverse_dims=True)
 
 if save_figure == True:
-    fig.savefig(output_filepath+r'\PCARaw_Loading.eps', format='eps')
-    fig.savefig(output_filepath+r'\PCARaw_Loading.tif', format='tiff')
+    fig.savefig(data_file+r'\PCARaw_Loading.eps', format='eps')
+    fig.savefig(data_file+r'\PCARaw_Loading.tif', format='tiff')
 
 #%% PCA_Clean prior to F3R Reconstruction?
-PCA_pre_reconstruction_clean = False
+PCA_pre_reconstruction_clean = True
 
 # Filters out the components specified from h5_resh (the reshaped h5 data)
 if PCA_pre_reconstruction_clean == True:
     
     # important! If choosing components, min is 3 or interprets as start/stop range of slice
-    clean_components = np.array([0,1,3,4,5]) # np.append(range(5,9),(17,18))
+    clean_components = np.array([0,1,2,4,5]) # np.append(range(5,9),(17,18))
 
     # checks for existing SVD
     itms = [i for i in h5_resh.parent.items()]
@@ -1044,11 +1045,11 @@ px.plot_utils.set_tick_font_size(ax, 14)
 
 if save_figure == True:
     if PCA_pre_reconstruction_clean == False:
-        fig.savefig(output_filepath+r'\Noise_Spectra_noprePCA.eps', format='eps')
-        fig.savefig(output_filepath+r'\Noise_Spectra_noprePCA.tif', format='tiff')
+        fig.savefig(data_file+r'\Noise_Spectra_noprePCA.eps', format='eps')
+        fig.savefig(data_file+r'\Noise_Spectra_noprePCA.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+r'\Noise_Spectra_prePCA.eps', format='eps')
-        fig.savefig(output_filepath+r'\Noise_Spectra_prePCA.tif', format='tiff')        
+        fig.savefig(data_file+r'\Noise_Spectra_prePCA.eps', format='eps')
+        fig.savefig(data_file+r'\Noise_Spectra_prePCA.tif', format='tiff')        
 
 phaseshifted = G_time[i].reshape(-1, pixel_ex_wfm.size)
 fig, axes = px.plot_utils.plot_curves(pixel_ex_wfm, phaseshifted, use_rainbow_plots=True, 
@@ -1056,9 +1057,9 @@ fig, axes = px.plot_utils.plot_curves(pixel_ex_wfm, phaseshifted, use_rainbow_pl
                                      num_plots=4, y_label='Deflection (a.u.)')
 
 if PCA_pre_reconstruction_clean == False:
-    fig.savefig(output_filepath+r'\PostFilter_Displacement_noprePCA.tif', format='tiff')
+    fig.savefig(data_file+r'\PostFilter_Displacement_noprePCA.tif', format='tiff')
 else:
-    fig.savefig(output_filepath+r'\PostFilter_Displacement_prePCA_['+str(clean_components)+'].tif', format='tiff')
+    fig.savefig(data_file+r'\PostFilter_Displacement_prePCA_['+str(clean_components)+'].tif', format='tiff')
 
 #%% Reshaping and Storing  Results
 
@@ -1114,9 +1115,9 @@ fig, axes =px.plot_utils.plot_scree(h5_S, title='Skree plot')
 
 if save_figure == True:
     if PCA_pre_reconstruction_clean == False:
-        fig.savefig(output_filepath+'\PCF3R_Skree_noPrePCa.tif', format='tiff')
+        fig.savefig(data_file+'\PCF3R_Skree_noPrePCa.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\PCF3R_Skree_withPrePCA.tif', format='tiff')
+        fig.savefig(data_file+'\PCF3R_Skree_withPrePCA.tif', format='tiff')
 
 skree_sum = np.zeros(h5_S.shape)
 
@@ -1139,29 +1140,29 @@ fig, axes =px.plot_utils.plot_curves(pixel_ex_wfm, first_evecs, x_label='Voltage
 
 if save_figure == True:
     if PCA_pre_reconstruction_clean == False:
-        fig.savefig(output_filepath+'\PCAF3R_Eig_noPrePCA.eps', format='eps')
-        fig.savefig(output_filepath+'\PCF3R_Eig_noPrePCA.tif', format='tiff')
+        fig.savefig(data_file+'\PCAF3R_Eig_noPrePCA.eps', format='eps')
+        fig.savefig(data_file+'\PCF3R_Eig_noPrePCA.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\PCAF3R_Eig_withPrePCA.eps', format='eps')
-        fig.savefig(output_filepath+'\PCF3R_Eig_withPrePCA.tif', format='tiff')
+        fig.savefig(data_file+'\PCAF3R_Eig_withPrePCA.eps', format='eps')
+        fig.savefig(data_file+'\PCF3R_Eig_withPrePCA.tif', format='tiff')
 
 # Visualize the abundance maps:
 fig, axes =px.plot_utils.plot_map_stack(abun_maps_postfilter, num_comps=25, title='SVD Abundance Maps',
                              color_bar_mode='single', cmap='inferno', reverse_dims=True)
 if save_figure == True:
     if PCA_pre_reconstruction_clean == False:
-        fig.savefig(output_filepath+'\PCAF3R_Loadings_noPrePCA.eps', format='eps')
-        fig.savefig(output_filepath+'\PCF3R_Loadings_noPrePCA.tif', format='tiff')
+        fig.savefig(data_file+'\PCAF3R_Loadings_noPrePCA.eps', format='eps')
+        fig.savefig(data_file+'\PCF3R_Loadings_noPrePCA.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\PCAF3R_Loadings_withPrePCA.eps', format='eps')
-        fig.savefig(output_filepath+'\PCF3R_Loadings_withPrePCA.tif', format='tiff')
+        fig.savefig(data_file+'\PCAF3R_Loadings_withPrePCA.eps', format='eps')
+        fig.savefig(data_file+'\PCF3R_Loadings_withPrePCA.tif', format='tiff')
 
 
 #%% Here you can PCA clean data if you like
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,10]) ##Components you want to keep
+    clean_components = np.array([0,6]) ##Components you want to keep
     #num_components = len(clean_components)
     
     # checks for existing SVD
@@ -1187,7 +1188,7 @@ if PCA_post_reconstruction_clean == True:
 
 # This is number of periods you want to average over,
 # for best time resolution =1 (but takes longer to fit)
-periods = 4
+periods = 2
 complete_periods = True
  
 num_periods_per_sample = int(np.floor(num_periods / periods))
@@ -1299,16 +1300,16 @@ for row in rows:
 prerecon = 'PrePCA' if PCA_pre_reconstruction_clean == True else ''
         
 if PCA_post_reconstruction_clean == True:
-    fig.savefig(output_filepath+'\RandomCPDs_'+prerecon+'PCA'+str(clean_components)
+    fig.savefig(data_file+'\RandomCPDs_'+prerecon+'PCA'+str(clean_components)
                 +'_'+str(periods)+'periods.tif', format='tiff')
 else:
-    fig.savefig(output_filepath+'\RandomCPDs_'+prerecon+'noPCA_'+str(periods)+'periods.tif', format='tiff')
+    fig.savefig(data_file+'\RandomCPDs_'+prerecon+'noPCA_'+str(periods)+'periods.tif', format='tiff')
 
 #%% Repeat on the full dataset
 
 # This is number of periods you want to average over,
 # for best time resolution =1 (but takes longer to fit)
-periods = 4
+periods = 2
 complete_periods = True
  
 num_periods_per_sample = int(np.floor(num_periods / periods))
@@ -1491,7 +1492,7 @@ plt.figure(figsize=(8,6))
 plt.plot(time,test)
 plt.xlabel('Time (ms)', fontsize=16)
 plt.ylabel('CPD (V)', fontsize=16)
-plt.savefig(output_filepath+'\CPD_sample.tif', format='tiff')
+plt.savefig(data_file+'\CPD_sample.tif', format='tiff')
 
 bds = ([-10, (1e-5), -5, time_on[0]-1e-10], 
        [10, (1e-1), 5, time_on[0]+1e-10])
@@ -1504,7 +1505,7 @@ print(popt1[1]*1e3, ' ms CPD on tau')
 plt.figure(figsize=(8,6))
 plt.plot(time_on, cut)
 plt.plot(time_on, fitexp(time_on, *popt1), 'g--')
-plt.savefig(output_filepath+'\CPD_on_fitting_example.tif', format='tiff')
+plt.savefig(data_file+'\CPD_on_fitting_example.tif', format='tiff')
 
 bds = ([-10, (1e-5), -5, time_off[0]-1e-10], 
        [10, (1e-1), 5, time_off[0]+1e-10])
@@ -1515,7 +1516,7 @@ print(popt1[1]*1e3, ' ms CPD off tau')
 plt.figure(figsize=(8,6))
 plt.plot(time_off, cut)
 plt.plot(time_off, fitexp(time_off, *popt1), 'r--')
-plt.savefig(output_filepath+'\CPD_off_fitting_example.tif', format='tiff')
+plt.savefig(data_file+'\CPD_off_fitting_example.tif', format='tiff')
 
 bds_bion = ([1e-15,     1e-5,   1e-15,     1e-5,   -5, time_on[0]-1e-10], 
        [1,         1e-1,   5,      500,   5,  time_on[0]+1e-10])
@@ -1525,7 +1526,7 @@ print(popt1[1]*1e3, ' ms CPD on tau', popt1[3]*1e3,' ms CPD on tau2')
 plt.figure(figsize=(8,6))
 plt.plot(time_on, cut)
 plt.plot(time_on, fitbiexp(time_on, *popt1), 'g--')
-plt.savefig(output_filepath+'\CPD_on_fitting_example-biexponential.tif', format='tiff')
+plt.savefig(data_file+'\CPD_on_fitting_example-biexponential.tif', format='tiff')
 
 bds_bioff = ([-5,     1e-5,   -5,     1e-5,   -5, time_off[0]-1e-10], 
        [-1e-15, 1e-1,   -1e-15,      500,   5,  time_off[0]+1e-10])
@@ -1535,10 +1536,10 @@ print(popt1[1]*1e3, ' ms CPD off tau', popt1[3]*1e3,' ms CPD on tau2')
 plt.figure(figsize=(8,6))
 plt.plot(time_off, cut)
 plt.plot(time_off, fitbiexp(time_off, *popt1), 'g--')
-plt.savefig(output_filepath+'\CPD_off_fitting_example-biexponential.tif', format='tiff')
+plt.savefig(data_file+'\CPD_off_fitting_example-biexponential.tif', format='tiff')
 
 #%% Generate CPD
-b
+
 # Biexponential fitting makes this very slow! Warning!
 doBiexp_fit = False
 
@@ -1594,17 +1595,17 @@ for r in np.arange(CPD_on_avg.shape[0]):
 SPV = CPD_on_avg - CPD_off_avg
 
 if PCA_post_reconstruction_clean == True:
-    np.savetxt(output_filepath+r'\CPD_on_PCApost.txt', CPD_on_avg, delimiter=' ')
-    np.savetxt(output_filepath+r'\CPD_off_PCApost.txt', CPD_off_avg, delimiter=' ')
-    np.savetxt(output_filepath+r'\CPD_on_time_PCApost.txt', CPD_on_time, delimiter=' ')
-    np.savetxt(output_filepath+r'\CPD_off_time_PCApost.txt', CPD_off_time, delimiter=' ')
-    np.savetxt(output_filepath+r'\SPV_PCApost.txt', SPV, delimiter=' ')
+    np.savetxt(data_file+r'\CPD_on_PCApost.txt', CPD_on_avg, delimiter=' ')
+    np.savetxt(data_file+r'\CPD_off_PCApost.txt', CPD_off_avg, delimiter=' ')
+    np.savetxt(data_file+r'\CPD_on_time_PCApost.txt', CPD_on_time, delimiter=' ')
+    np.savetxt(data_file+r'\CPD_off_time_PCApost.txt', CPD_off_time, delimiter=' ')
+    np.savetxt(data_file+r'\SPV_PCApost.txt', SPV, delimiter=' ')
 else:
-    np.savetxt(output_filepath+r'\CPD_on_noPCApost.txt', CPD_on_avg, delimiter=' ')
-    np.savetxt(output_filepath+r'\CPD_off_noPCApost.txt', CPD_off_avg, delimiter=' ')
-    np.savetxt(output_filepath+r'\CPD_on_time_noPCApost.txt', CPD_on_time, delimiter=' ')
-    np.savetxt(output_filepath+r'\CPD_off_time_noPCApost.txt', CPD_off_time, delimiter=' ')
-    np.savetxt(output_filepath+r'\SPV_noPCApost.txt', SPV, delimiter=' ')
+    np.savetxt(data_file+r'\CPD_on_noPCApost.txt', CPD_on_avg, delimiter=' ')
+    np.savetxt(data_file+r'\CPD_off_noPCApost.txt', CPD_off_avg, delimiter=' ')
+    np.savetxt(data_file+r'\CPD_on_time_noPCApost.txt', CPD_on_time, delimiter=' ')
+    np.savetxt(data_file+r'\CPD_off_time_noPCApost.txt', CPD_off_time, delimiter=' ')
+    np.savetxt(data_file+r'\SPV_noPCApost.txt', SPV, delimiter=' ')
 
 # Save CPD to the H5 file, currently doesn't check for overwrites
 grp_name = h5_main.name.split('/')[-1] + '-CPD'
@@ -1670,11 +1671,11 @@ a[1].set_title('CPD On Average', fontsize=12)
 
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
-        fig.savefig(output_filepath+'\CPDon_vs_off_PCApost.eps', format='eps')
-        fig.savefig(output_filepath+'\CPDon_vs_off_PCApost_'+str(clean_components)+'.tif', format='tiff')
+        fig.savefig(data_file+'\CPDon_vs_off_PCApost.eps', format='eps')
+        fig.savefig(data_file+'\CPDon_vs_off_PCApost_'+str(clean_components)+'.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\CPDon_vs_off_noPCApost.eps', format='eps')
-        fig.savefig(output_filepath+'\CPDon_vs_off_noPCApost.tif', format='tiff')
+        fig.savefig(data_file+'\CPDon_vs_off_noPCApost.eps', format='eps')
+        fig.savefig(data_file+'\CPDon_vs_off_noPCApost.tif', format='tiff')
     
 # some clean-up for plotting to remove curve-fit errors
 from scipy import signal
@@ -1707,9 +1708,9 @@ cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
 
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
-        fig.savefig(output_filepath+'\CPD_times_noPCA.tif', format='tiff')
+        fig.savefig(data_file+'\CPD_times_noPCA.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\CPD_times_PCA_'+str(clean_components)+'.tif', format='tiff')
+        fig.savefig(data_file+'\CPD_times_PCA_'+str(clean_components)+'.tif', format='tiff')
 
 fig, a = plt.subplots(nrows=1, figsize=(13, 3))
 
@@ -1721,9 +1722,9 @@ a.set_title('CPD Off Time', fontsize=12)
 
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
-        fig.savefig(output_filepath+'\CPDoff_times_PCA-Alone_'+str(clean_components)+'.tif', format='tiff')
+        fig.savefig(data_file+'\CPDoff_times_PCA-Alone_'+str(clean_components)+'.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\CPDoff_times_noPCA-Alone.tif', format='tiff')    
+        fig.savefig(data_file+'\CPDoff_times_noPCA-Alone.tif', format='tiff')    
 
        
 fig, a = plt.subplots(nrows=1, figsize=(13, 3))
@@ -1735,9 +1736,9 @@ a.set_title('CPD On Time', fontsize=12)
 
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
-        fig.savefig(output_filepath+'\CPDon_times_PCA-Alone_'+str(clean_components)+'.tif', format='tiff')
+        fig.savefig(data_file+'\CPDon_times_PCA-Alone_'+str(clean_components)+'.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\CPDon_times_noPCA-Alone.tif', format='tiff')    
+        fig.savefig(data_file+'\CPDon_times_noPCA-Alone.tif', format='tiff')    
         
 #fig, a = plt.subplots(nrows=1, figsize=(13, 3))
 #_, cbar = px.plot_utils.plot_map(a, CPD_grad_resh_on_avg, cmap='inferno', aspect=aspect, 
@@ -1748,9 +1749,9 @@ if save_figure == True:
 
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
-        fig.savefig(output_filepath+'\CPD_gradient_PCA-Alone_'+str(clean_components)+'.tif', format='tiff')
+        fig.savefig(data_file+'\CPD_gradient_PCA-Alone_'+str(clean_components)+'.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\CPD_gradient_noPCA-Alone.tif', format='tiff')    
+        fig.savefig(data_file+'\CPD_gradient_noPCA-Alone.tif', format='tiff')    
         
 #%%
 # SPV plotting
@@ -1765,11 +1766,11 @@ a.set_title('SPV (mV)', fontsize=12)
 
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
-        fig.savefig(output_filepath+'\SPV_PCApost.eps', format='eps')
-        fig.savefig(output_filepath+'\SPV_PCApost_'+str(clean_components)+'.tif', format='tiff')
+        fig.savefig(data_file+'\SPV_PCApost.eps', format='eps')
+        fig.savefig(data_file+'\SPV_PCApost_'+str(clean_components)+'.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\SPV_noPCApost.eps', format='eps')
-        fig.savefig(output_filepath+'\SPV_noPCApost.tif', format='tiff')
+        fig.savefig(data_file+'\SPV_noPCApost.eps', format='eps')
+        fig.savefig(data_file+'\SPV_noPCApost.tif', format='tiff')
 
 
 #%% CPD vs time
@@ -1832,9 +1833,9 @@ for k,j,m,c in zip(cpts, rpts, markers, colors):
     
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
-        fig.savefig(output_filepath+'\CPD_slices_PCApost.tif', format='tiff')
+        fig.savefig(data_file+'\CPD_slices_PCApost.tif', format='tiff')
     else:
-        fig.savefig(output_filepath+'\CPD_slices_noPCApost.tif', format='tiff')
+        fig.savefig(data_file+'\CPD_slices_noPCApost.tif', format='tiff')
     
 #%% Apply grain mask as needed
 
@@ -1851,8 +1852,8 @@ from pixelCPD import averagemask
 #plt.plot( CPD_GC_avg, 'r', label='GC')
 #a.legend(fontsize=14)
 #if save_figure == True:
-#    fig.savefig(output_filepath+'\CPD_GBavg.eps', format='eps')
-#    fig.savefig(output_filepath+'\CPD_GBavg.tif', format='tiff')
+#    fig.savefig(data_file+'\CPD_GBavg.eps', format='eps')
+#    fig.savefig(data_file+'\CPD_GBavg.tif', format='tiff')
 #
 #fig, a = plt.subplots()
 #a.set_title('CPD On Time', fontsize=12)
@@ -1860,7 +1861,7 @@ from pixelCPD import averagemask
 #plt.plot( CPD_GC_avg-CPD_GC_avg[0], 'r', label='GC')
 #a.legend(fontsize=14)
 #if save_figure == True:
-#    fig.savefig(output_filepath+'\CPD_GBavg_norm.tif', format='tiff')
+#    fig.savefig(data_file+'\CPD_GBavg_norm.tif', format='tiff')
 #
 #fig = plt.figure()
 #a = fig.add_subplot(111)
@@ -1882,29 +1883,29 @@ abun_maps = np.reshape(U[:,:25], (num_rows, num_cols,-1))
 fig, axes = px.plot_utils.plot_scree(S, title='Skree plot')
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\CPDon_Skree.eps', format='eps')
-    fig.savefig(output_filepath+'\CPDon_Skree.tif', format='tiff')
+    fig.savefig(data_file+'\CPDon_Skree.eps', format='eps')
+    fig.savefig(data_file+'\CPDon_Skree.tif', format='tiff')
 
 
 # Visualize the eigenvectors:
 first_evecs = V[:9, :]
 
-fig, axes =px.plot_utils.plot_loops(time_on*1E+3, first_evecs, x_label='Time (ms)', 
-                                    y_label='CPD Eig (a.u.)', plots_on_side=3,
+fig, axes =px.plot_utils.plot_curves(time_on*1E+3, first_evecs, x_label='Time (ms)', 
+                                    y_label='CPD Eig (a.u.)', num_plots=3,
                                     subtitle_prefix='Component', title='SVD Eigenvectors (F3R)',
                                     evenly_spaced=False)
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\CPDonEig.eps', format='eps')
-    fig.savefig(output_filepath+'\CPDon_Eig.tif', format='tiff')
+    fig.savefig(data_file+'\CPDonEig.eps', format='eps')
+    fig.savefig(data_file+'\CPDon_Eig.tif', format='tiff')
 
 # Visualize the abundance maps:
 fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, title='SVD Abundance Maps',
                                         color_bar_mode='single', cmap='inferno', reverse_dims=True)
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\CPDon_Loadings.eps', format='eps')
-    fig.savefig(output_filepath+'\CPDon_Loadings.tif', format='tiff')
+    fig.savefig(data_file+'\CPDon_Loadings.eps', format='eps')
+    fig.savefig(data_file+'\CPDon_Loadings.tif', format='tiff')
 
 ####### CPD_OFF CASE
 U, S, V = randomized_svd(CPD_off, 256, n_iter=3)
@@ -1916,28 +1917,28 @@ abun_maps = np.reshape(U[:,:25], (num_rows, num_cols,-1))
 fig, axes = px.plot_utils.plot_scree(S, title='Skree plot')
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\CPDoff_Skree.eps', format='eps')
-    fig.savefig(output_filepath+'\CPDoff_Skree.tif', format='tiff')
+    fig.savefig(data_file+'\CPDoff_Skree.eps', format='eps')
+    fig.savefig(data_file+'\CPDoff_Skree.tif', format='tiff')
 
 
 # Visualize the eigenvectors:
 first_evecs = V[:9, :]
 
-fig, axes =px.plot_utils.plot_loops(time_off*1E+3, first_evecs, x_label='Time (ms)', 
-                                    y_label='CPD Eig (a.u.)', plots_on_side=3,
+fig, axes =px.plot_utils.plot_curves(time_off*1E+3, first_evecs, x_label='Time (ms)', 
+                                    y_label='CPD Eig (a.u.)', num_plots=3,
                                     subtitle_prefix='Component', title='SVD Eigenvectors (F3R)',
                                     evenly_spaced=False)
 if save_figure == True:
-    fig.savefig(output_filepath+'\CPDoff_Eig.eps', format='eps')
-    fig.savefig(output_filepath+'\CPDoff_Eig.tif', format='tiff')
+    fig.savefig(data_file+'\CPDoff_Eig.eps', format='eps')
+    fig.savefig(data_file+'\CPDoff_Eig.tif', format='tiff')
 
 # Visualize the abundance maps:
 fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, title='SVD Abundance Maps',
                              color_bar_mode='single', cmap='inferno', reverse_dims=True)
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\CPDoff_Loadings.eps', format='eps')
-    fig.savefig(output_filepath+'\CPDoff_Loadings.tif', format='tiff')
+    fig.savefig(data_file+'\CPDoff_Loadings.eps', format='eps')
+    fig.savefig(data_file+'\CPDoff_Loadings.tif', format='tiff')
     
 #%% Data Visualization
 
@@ -1960,27 +1961,27 @@ abun_maps = np.reshape(U[:,:25], (num_rows, num_cols,-1))
 fig, axes = px.plot_utils.plot_scree(S, title='Skree plot')
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\CPDtotal_Skree.eps', format='eps')
-    fig.savefig(output_filepath+'\CPDtotal_Skree.tif', format='tiff')
+    fig.savefig(data_file+'\CPDtotal_Skree.eps', format='eps')
+    fig.savefig(data_file+'\CPDtotal_Skree.tif', format='tiff')
 
 
 # Visualize the eigenvectors:
 first_evecs = V[:6, :]
 
-fig, axes =px.plot_utils.plot_loops(time[:-1]*1E+3, first_evecs, x_label='Time (ms)', y_label='CPD Eig (a.u.)', plots_on_side=3,
-                         subtitle_prefix='Component', title='SVD Eigenvectors (F3R)', evenly_spaced=False)
+fig, axes =px.plot_utils.plot_curves(time[:-1]*1E+3, first_evecs, x_label='Time (ms)', y_label='CPD Eig (a.u.)', num_plots=3,
+                                     subtitle_prefix='Component', title='SVD Eigenvectors (F3R)', evenly_spaced=False)
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\CPDtotal_Eig.eps', format='eps')
-    fig.savefig(output_filepath+'\CPDtotal_Eig.tif', format='tiff')
+    fig.savefig(data_file+'\CPDtotal_Eig.eps', format='eps')
+    fig.savefig(data_file+'\CPDtotal_Eig.tif', format='tiff')
 
 # Visualize the abundance maps:
 fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, title='SVD Abundance Maps',
                              color_bar_mode='single', cmap='inferno', reverse_dims=True)
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\CPDtotal_Loadings.eps', format='eps')
-    fig.savefig(output_filepath+'\CPDtotal_Loadings.tif', format='tiff')
+    fig.savefig(data_file+'\CPDtotal_Loadings.eps', format='eps')
+    fig.savefig(data_file+'\CPDtotal_Loadings.tif', format='tiff')
 
 
 #%% CPD Time Slices
@@ -2006,8 +2007,8 @@ for k in timeslice:
     cx = fig.add_axes([0.9, 0.11, 0.02, 0.77])
     cbar = fig.colorbar(im, cax=cx)
     cbar.set_label('CPD (mV)', rotation=270, labelpad=16)
-    #fig.savefig(output_filepath+'\CPDslice_' + tl + '_ms.eps', format='eps')
-    fig.savefig(output_filepath+'\CPDslice_' + tl + '_ms.tif', format='tiff')
+    #fig.savefig(data_file+'\CPDslice_' + tl + '_ms.eps', format='eps')
+    fig.savefig(data_file+'\CPDslice_' + tl + '_ms.tif', format='tiff')
 
 #%%Animate and save
 
@@ -2035,14 +2036,14 @@ for k in timeslice:
 #                                repeat_delay=10)
 ##ani = animation.FuncAnimation(fig, update, frames=1, interval=150, blit=False,
 ##                                repeat_delay=1000)
-#ani.save(output_filepath+'\CPD.mp4')
+#ani.save(data_file+'\CPD.mp4')
 
 #%% Cross-sectional animation, setup
 
 # note shape of CPD is 64x128, not 128x64
 
 #in length units, in microns here
-cptslabels = [12, 16] #column points, row points
+cptslabels = [8, 13] #column points, row points
 rptslabels = [3.8  , 3.8]
 
 cpts = [int(i) for i in np.array(cptslabels) * (1e-6/ img_length) * num_cols]
@@ -2102,10 +2103,10 @@ for k in range(len(displays)):
     a[2].plot(xax, sectn*1e3, markers[k], markersize=8, label=labels[k]) 
 
 length_labels = str(cptslabels[0])+'-'+str(cptslabels[1])+'um_at_'+str(rptslabels[0])+'_um'
-fig.savefig(output_filepath+'\CPD_composite_'+length_labels+'.tif', format='tif')
+fig.savefig(data_file+'\CPD_composite_'+length_labels+'.tif', format='tif')
 
 a[1].legend(fontsize='12')
-fig.savefig(output_filepath+'\CPD_composite_'+length_labels+'_legend.tif', format='tif')
+fig.savefig(data_file+'\CPD_composite_'+length_labels+'_legend.tif', format='tif')
 
 #%% Animate
 
@@ -2152,14 +2153,14 @@ for k in np.arange(time.shape[0]):
 
 ani = animation.ArtistAnimation(fig, ims, interval=60,repeat_delay=10)
 
-ani.save(output_filepath+'\CPD_graph_'+length_labels+'.mp4')
+ani.save(data_file+'\CPD_graph_'+length_labels+'.mp4')
 
 #%% Cross-sectional animation, setup
 
 # note shape of CPD is 64x128, not 128x64
 
 #in length units, in microns here
-cptslabels = [12, 16] #column points, row points
+cptslabels = [8, 16] #column points, row points
 rptslabels = [2 , 2]
 
 cpts = [int(i) for i in np.array(cptslabels) * (1e-6/ img_length) * num_cols]
@@ -2220,13 +2221,13 @@ for k in range(len(displays)):
     a[2].plot(xax, sectn*1e3, markers[k], markersize=8, label=labels[k]) 
 
 length_labels = str(cptslabels[0])+'-'+str(cptslabels[1])+'um_at_'+str(rptslabels[0])+'_um'
-fig.savefig(output_filepath+'\CPD_composite_'+length_labels+'_newNorms_.tif', format='tif')
+fig.savefig(data_file+'\CPD_composite_'+length_labels+'_newNorms_.tif', format='tif')
 a[1].legend(fontsize='12')
-fig.savefig(output_filepath+'\CPD_composite_'+length_labels+'_newNorms_legend.tif', format='tif')
+fig.savefig(data_file+'\CPD_composite_'+length_labels+'_newNorms_legend.tif', format='tif')
 
 #%% k-means clustering
 
-from ffta.utils import dist_cluster, mask_utils
+from ffta.analysis import dist_cluster, mask_utils
 import badpixels
 
 clusters=5
@@ -2260,30 +2261,30 @@ CPD_clust.analyze()
 CPD_clust.kmeans(clusters=clusters)
 fig, ax = CPD_clust.plot_img()
 if save_figure == True:
-    fig.savefig(output_filepath+'\masked_image-'+'.tif', format='tiff')
+    fig.savefig(data_file+'\masked_image-'+'.tif', format='tiff')
 
 fig, _ = CPD_clust.plot_kmeans()
 if save_figure == True:
-    fig.savefig(output_filepath+'\k_means_vs_grain_distance_numclusters-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
+    fig.savefig(data_file+'\k_means_vs_grain_distance_numclusters-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
 
 fig, _ = CPD_clust.heat_map()
 if save_figure == True:
-    fig.savefig(output_filepath+'\k_means_vs_grain_distance_heat_map_numclusters-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
+    fig.savefig(data_file+'\k_means_vs_grain_distance_heat_map_numclusters-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
 
 CPD_clust.segment_maps()
 CPD_clust.plot_segment_maps(ax)
 
 if save_figure == True:
-    fig.savefig(output_filepath+'\clustered_CPD-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
+    fig.savefig(data_file+'\clustered_CPD-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
 
 fig, ax = CPD_clust.plot_centers()
 ax.set_ylabel('CPD (V)')
 ax.set_xlabel('Time (s)')
 if save_figure == True:
-    fig.savefig(output_filepath+'\CPD_cluster_centers-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
+    fig.savefig(data_file+'\CPD_cluster_centers-'+str(CPD_clust.results.cluster_centers_.shape[0])+'.tif', format='tiff')
 
 fig, ax = CPD_clust.plot_img()
 
     #%% 
 hdf.close()
-del(output_filepath)
+del(data_file)
