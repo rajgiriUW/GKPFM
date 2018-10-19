@@ -186,6 +186,7 @@ if input_file_path.endswith('.dat') == True:
     
 else:
     h5_path = input_file_path
+    loadTuneValues = True
 
 #%% Loads data from H5 file instead
 '''
@@ -197,7 +198,8 @@ if loadTuneValues == True:
     h5_file = hdf.file
     nm_base = '/Measurement_000'
     tune_base = '/Tune_Values'
-    grp = hdf.file[nm_base+tune_base]
+    grp = px.hdf_utils.find_dataset(h5_file['/'], 'TF_norm')[0]
+    grp = hdf.file[grp.parent.name]
     
     for key in cantl_parms:
         
@@ -215,7 +217,7 @@ if loadTuneValues == True:
     samp_rate = parms_dict['IO_rate_[Hz]']
     
     N_points = parms_dict['num_bins']
-    N_points_per_line = parms_dict['points_per_line']
+    N_points_per_line = N_points * parms_dict['grid_num_cols']
     N_points_per_pixel = parms_dict['num_bins']
     
     dt = 1/samp_rate #delta-time in seconds
@@ -289,7 +291,7 @@ TF_vec = Yt0_tune/F0
 
 #%% Step 1B.ii) Plot tune
 
-plt.figure(2)
+plt.figure()
 plt.subplot(2,1,1)
 #plt.semilogy(np.abs(w_vec2[excited_bin_ind])*1E-6,
 #             np.abs(TF_vec[excited_bin_ind]))
@@ -310,7 +312,7 @@ plt.semilogy(np.abs(w_vec2[excited_bin_ind])*1E-3,
 plt.xlabel('Frequency (kHz)')
 plt.ylabel('Phase (Rad)')
 plt.xlim([band_edge_mat[0,0]*1e-3, band_edge_mat[0,1]*1e-3])
-#plt.tight_layout(pad=0.0, w_pad=0.0, h_pad=0.0)
+plt.tight_layout(pad=0.0, w_pad=0.0, h_pad=0.0)
 
 #%% Step 1C) Construct an effective Transfer function (TF_Norm) from SHO fits
 
@@ -450,7 +452,7 @@ hdf.close()
 from pathlib import Path
 
 # Set save file, can comment out and use the block above as you wish
-data_file = r'E:\ORNL\20191221_BAPI\BAPI21_2ms_100mA__0013'
+data_file = r'E:\ORNL\20191221_BAPI\BAPI22_2ms_700mA__0009'
 save_figure = True
 data_file = os.path.expanduser(data_file)
 
@@ -613,11 +615,11 @@ if preLoaded == True:
         else:
             PCA_clean_data_prerecon = PCA_clean_data_prerecon[0]
             h5_svd_group = PCA_clean_data_prerecon.parent.parent
-            h5_Uprerecon = h5_svd_group['U']
-            h5_Vprerecon = h5_svd_group['V']
-            h5_Sprerecon = h5_svd_group['S']
+            h5_Uprecon = h5_svd_group['U']
+            h5_Vprecon = h5_svd_group['V']
+            h5_Sprecon = h5_svd_group['S']
         
-            abun_maps_prefilter = np.reshape(h5_Uprerecon[:,:25], (num_rows, num_cols,-1))
+            abun_maps_prefilter = np.reshape(h5_Uprecon[:,:25], (num_rows, num_cols,-1))
 
     else:
         PCA_pre_reconstruction_clean = False
@@ -727,7 +729,7 @@ nbf = px.processing.fft.NoiseBandFilter(num_pts, samp_rate,
 #                                        [1E3, 1E3, 1.5E3])
 
 freq_filts = [lpf, nbf]
-noise_tolerance = 10e-6
+noise_tolerance = 0.01e-6
 
 narrowband = False
 if narrowband == True:
@@ -763,7 +765,7 @@ This segment does two things:
 # Try Force Conversion on Filtered data
 
 # Phase Offset
-ph = -.283 - np.pi   # phase from cable delays between excitation and response
+ph = -.313 - np.pi   # phase from cable delays between excitation and response
 search_phase = False # whether to brute force find the best phase
 
 # Calculates NoiseLimit
@@ -868,6 +870,7 @@ fig.savefig(data_file+r'\PostFilter_Displacements.tif', format='tiff')
 #%% Filter the full data set; this process is quite slow
 
 h5_filt_grp = px.hdf_utils.check_for_old(h5_main, 'FFT_Filtering')#, new_parms=filter_parms)
+overwrite = True
 
 if not h5_filt_grp:
     
@@ -955,7 +958,7 @@ PCA_pre_reconstruction_clean = True
 if PCA_pre_reconstruction_clean == True:
     
     # important! If choosing components, min is 3 or interprets as start/stop range of slice
-    clean_components = np.array([0,1,2,4,5]) # np.append(range(5,9),(17,18))
+    clean_components = np.array([0,3,4,5]) # np.append(range(5,9),(17,18))
 
     # checks for existing SVD
     itms = [i for i in h5_resh.parent.items()]
@@ -1002,6 +1005,9 @@ NoiseLimit = np.ceil(noise_floor)
 
 for i in range(num_rows):
 
+    if i%10 == 0:
+        print('Row',i)        
+    
     signal_ind_vec=np.arange(w_vec2.size)
     
     G = np.zeros(w_vec2.size,dtype=complex)         # G = raw
@@ -1162,7 +1168,8 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,6]) ##Components you want to keep
+    clean_components = np.array([0,1,2,3,4,5,6,7]) ##Components you want to keep
+    #clean_components = np.array([0,1,2,4,6,12,13]) ##Components you want to keep
     #num_components = len(clean_components)
     
     # checks for existing SVD
@@ -1188,7 +1195,7 @@ if PCA_post_reconstruction_clean == True:
 
 # This is number of periods you want to average over,
 # for best time resolution =1 (but takes longer to fit)
-periods = 2
+periods = 4
 complete_periods = True
  
 num_periods_per_sample = int(np.floor(num_periods / periods))
@@ -1309,7 +1316,7 @@ else:
 
 # This is number of periods you want to average over,
 # for best time resolution =1 (but takes longer to fit)
-periods = 2
+periods = 4
 complete_periods = True
  
 num_periods_per_sample = int(np.floor(num_periods / periods))
@@ -2161,7 +2168,7 @@ ani.save(data_file+'\CPD_graph_'+length_labels+'.mp4')
 
 #in length units, in microns here
 cptslabels = [8, 16] #column points, row points
-rptslabels = [2 , 2]
+rptslabels = [4 , 4]
 
 cpts = [int(i) for i in np.array(cptslabels) * (1e-6/ img_length) * num_cols]
 rpts = [int(i) for i in np.array(rptslabels) * (1e-6/ img_height) * num_rows]
