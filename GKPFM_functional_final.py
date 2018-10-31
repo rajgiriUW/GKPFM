@@ -97,17 +97,12 @@ save_figure = True
 #data_file = os.path.expanduser(data_file)
 
 # Avoid prompts when loading data
-pre_load_files = False
+pre_load_files = True
 
 if pre_load_files is True:
     idx = data_file.rfind("\\")
-    data_file = os.path.join(data_file, data_file[idx+1:] + '_bigtime_00.dat')
-    
-    tune_path = os.path.abspath(data_file)
-    tune_path = os.path.expanduser(tune_path)
-    idx = tune_path.rfind("\\")
-    tune_file = [os.path.join(tune_path, tune_path[idx+1:] + '.h5'),
-                 os.path.join(tune_path, tune_path[idx+1:] + '_bigtime_00.dat')]
+    tune_file = [os.path.join(data_file, data_file[idx+1:] + '.h5'),
+                 os.path.join(data_file, data_file[idx+1:] + '_bigtime_00.dat')]
     
     del(idx)
 
@@ -593,7 +588,7 @@ if preLoaded == True:
     nm_filt_resh = 'Filtered_Data-Reshape_000'
     nm_h5_resh = 'h5_F3R-Reshape_000'
     nm_SVD = 'Reshaped_Data-SVD_000'
-    nm_CPD = nm_base + '/Raw_Data-CPD'
+    nm_CPD = nm_base + '/CPD'
     
     grp = hdf.file['/Measurement_000/Channel_000']
     h5_filt = px.hdf_utils.find_dataset(grp, 'Filtered_Data')[0]
@@ -639,7 +634,7 @@ if preLoaded == True:
     else:
         PCA_post_reconstruction_clean = True
         PCA_clean_data_postrecon = PCA_clean_data_postrecon[0]
-        
+            
         h5_svd_group = PCA_clean_data_postrecon.parent.parent
         h5_U = h5_svd_group['U']
         h5_V = h5_svd_group['V']
@@ -648,16 +643,28 @@ if preLoaded == True:
         abun_maps_postfilter = np.reshape(h5_U[:,:25], (num_rows, num_cols,-1))
     
     # CPD
-    CPD = px.hdf_utils.find_dataset(grp, 'CPD')[0]
-    CPD_on_time = px.hdf_utils.find_dataset(grp, 'CPD_on_time')[0]
-    CPD_off_time = px.hdf_utils.find_dataset(grp, 'CPD_off_time')[0]
+    names = h5_list(h5_main.parent,'CPD')[-1]
+    CPD = px.hdf_utils.find_dataset(h5_file[h5_main.parent.name+'/'+names], 'CPD')[0]
+    CPD_grp = CPD.parent
+    h5_CPD = CPD
+    CPD_on_time = px.hdf_utils.find_dataset(CPD_grp, 'CPD_on_time')[0]
+    CPD_off_time = px.hdf_utils.find_dataset(CPD_grp, 'CPD_off_time')[0]
     if type(CPD_on_time != np.ndarray):
         CPD_on_time = CPD_on_time.value
         CPD_off_time = CPD_off_time.value
     
     CPD_off_avg = np.zeros(CPD_on_time.shape)
     CPD_on_avg = np.zeros(CPD_on_time.shape)
-    SPV = CPD_on_avg - CPD_off_avg
+    
+    CPD_recon_off_avg = np.zeros(CPD_on_time.shape)
+    CPD_recon_on_avg = np.zeros(CPD_on_time.shape)
+        
+    CPD_grad_on_avg = np.zeros(CPD_on_time.shape)
+    CPD_grad_off_avg = np.zeros(CPD_on_time.shape)
+    
+    CPD_offset_off_avg = np.zeros(CPD_on_time.shape)
+    CPD_offset_on_avg = np.zeros(CPD_on_time.shape)
+    
     parms_dict = h5_main.parent.parent.attrs
     num_rows = parms_dict['grid_num_rows']
     num_cols = parms_dict['grid_num_cols']
@@ -672,24 +679,28 @@ if preLoaded == True:
             CPD_off_avg[r][c] = np.mean(CPD[r*num_cols + c,p_off:])
             CPD_on_avg[r][c] = np.mean(CPD[r*num_cols + c,p_on:p_off])
     
-    
+    SPV = CPD_on_avg - CPD_off_avg
     # Parabola fit
     wHfit3 = px.hdf_utils.find_dataset(hdf.file['/'],'parafit_main')[0]
     reconstruct = False
 
     CPD_recon = np.zeros([num_rows*num_cols, wHfit3.shape[1]])
     CPD_grad = np.zeros([num_rows*num_cols, wHfit3.shape[1]])
+    CPD_offset = np.zeros([num_rows*num_cols, wHfit3.shape[1]])
         
     CPD_recon[:,:] = -0.5*np.divide(wHfit3[:,:,1],wHfit3[:,:,2]) # vertex of parabola
     CPD_grad[:,:] = wHfit3[:,:,2]
-    
-    CPD_grad_resh_on_avg = np.zeros(CPD_on_time.shape)
-    CPD_grad_resh_off_avg = np.zeros(CPD_on_time.shape)
+    CPD_offset[:,:] = wHfit3[:,:,0]
     
     for r in np.arange(CPD_on_time.shape[0]):
         for c in np.arange(CPD_on_time.shape[1]):
-            CPD_grad_resh_off_avg[r][c] = np.mean(CPD_grad[r*num_cols + c,p_off:])
-            CPD_grad_resh_on_avg[r][c] = np.mean(CPD_grad[r*num_cols + c,p_on:p_off])
+
+            CPD_recon_off_avg[r][c] = np.mean(CPD_recon[r*num_cols + c,p_off:])
+            CPD_recon_on_avg[r][c] = np.mean(CPD_recon[r*num_cols + c,p_on:p_off])
+            CPD_grad_off_avg[r][c] = np.mean(CPD_grad[r*num_cols + c,p_off:])
+            CPD_grad_on_avg[r][c] = np.mean(CPD_grad[r*num_cols + c,p_on:p_off])
+            CPD_offset_on_avg[r][c] = np.mean(CPD_offset[r*num_cols + c,p_on:p_off])
+            CPD_offset_off_avg[r][c] = np.mean(CPD_offset[r*num_cols + c,p_off:])
     
     dset = wHfit3[:,:,:]
 
@@ -729,7 +740,7 @@ nbf = px.processing.fft.NoiseBandFilter(num_pts, samp_rate,
 #                                        [1E3, 1E3, 1.5E3])
 
 freq_filts = [lpf, nbf]
-noise_tolerance = 0.01e-6
+noise_tolerance = 10e-6
 
 narrowband = False
 if narrowband == True:
@@ -765,7 +776,7 @@ This segment does two things:
 # Try Force Conversion on Filtered data
 
 # Phase Offset
-ph = -.313 - np.pi   # phase from cable delays between excitation and response
+ph = -.296 - np.pi   # phase from cable delays between excitation and response
 search_phase = False # whether to brute force find the best phase
 
 # Calculates NoiseLimit
@@ -878,7 +889,7 @@ if not h5_filt_grp:
                                           noise_threshold=noise_tolerance,
                                           write_filtered=True, write_condensed=False, 
                                           num_pix=1,verbose=True, cores=1, max_mem_mb=512)
-    h5_filt_grp = sig_filt.compute()
+    h5_filt_grp = sig_filt.compute(override=overwrite)
     
 else:
     print('Taking previously computed results')
@@ -958,7 +969,7 @@ PCA_pre_reconstruction_clean = True
 if PCA_pre_reconstruction_clean == True:
     
     # important! If choosing components, min is 3 or interprets as start/stop range of slice
-    clean_components = np.array([0,3,4,5]) # np.append(range(5,9),(17,18))
+    clean_components = np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]) # np.append(range(5,9),(17,18))
 
     # checks for existing SVD
     itms = [i for i in h5_resh.parent.items()]
@@ -1168,7 +1179,7 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,1,2,3,4,5,6,7]) ##Components you want to keep
+    clean_components = np.array([0,1,2,3,4]) ##Components you want to keep
     #clean_components = np.array([0,1,2,4,6,12,13]) ##Components you want to keep
     #num_components = len(clean_components)
     
@@ -1195,7 +1206,7 @@ if PCA_post_reconstruction_clean == True:
 
 # This is number of periods you want to average over,
 # for best time resolution =1 (but takes longer to fit)
-periods = 4
+periods = 2
 complete_periods = True
  
 num_periods_per_sample = int(np.floor(num_periods / periods))
@@ -1316,7 +1327,7 @@ else:
 
 # This is number of periods you want to average over,
 # for best time resolution =1 (but takes longer to fit)
-periods = 4
+periods = 2
 complete_periods = True
  
 num_periods_per_sample = int(np.floor(num_periods / periods))
@@ -1380,6 +1391,8 @@ if PCA_post_reconstruction_clean == True:
     CPD_PCA_cap = wHfit3[:,:,2]
     CPD = np.copy(CPD_PCA[:,:])
     CPD_grad = np.copy(CPD_PCA_cap[:,:])
+    CPD_PCA_offset = wHfit3[:,:,0]
+    CPD_offset = np.copy(CPD_PCA_offset)
     
 else:
     
@@ -1387,31 +1400,21 @@ else:
     CPD_raw_cap = wHfit3[:,:,2]
     CPD = np.copy(CPD_raw[:,:])
     CPD_grad = np.copy(CPD_raw_cap[:,:])
+    CPD_raw_offset = wHfit3[:,:,0]
+    CPD_offset = np.copy(CPD_PCA_offset)
     
 # Save to HDF
-e = h5_main.parent.name + '/' + 'Raw_Data-CPD'
+print('Creating new dataset')
 
-if e in hdf.file:
-    print('Overwriting CPD dataset')
-    grp_name = hdf.file[e]
-    del grp_name['CPD']
-    grp_name['CPD'] = CPD[:,:]
-    
-    print(np.allclose(grp_name['CPD'].value, CPD))
-    
-else:    
-    print('Creating new dataset')
-#    grp_name = h5_main.name.split('/')[-1] + '-CPD'
-#    grp_CPD = px.io.VirtualGroup(grp_name, h5_main.parent.name + '/')
-    grp_CPD = px.hdf_utils.create_indexed_group(h5_main.parent, 'CPD')
-    CPD_spec_dims = [px.write_utils.Dimension('Time', 's', tx)]
-    h5_CPD = px.hdf_utils.write_main_dataset(grp_CPD,
-                                             CPD,
-                                             'CPD',
-                                             'CPD',
-                                             'V',
-                                             pos_dims,
-                                             CPD_spec_dims)
+grp_CPD = px.hdf_utils.create_indexed_group(h5_main.parent, 'CPD')
+CPD_spec_dims = [px.write_utils.Dimension('Time', 's', tx)]
+h5_CPD = px.hdf_utils.write_main_dataset(grp_CPD,
+                                         CPD,
+                                         'CPD',
+                                         'CPD',
+                                         'V',
+                                         pos_dims,
+                                         CPD_spec_dims)
 
 #    ds_CPD = px.io.VirtualDataset('CPD', data=CPD, parent = '/')
 #    grp_CPD.addChildren([ds_CPD])
@@ -1438,9 +1441,11 @@ if reconstruct:
     
     CPD_recon = np.zeros([num_rows*num_cols, dset.shape[1]])
     CPD_grad_recon = np.zeros([num_rows*num_cols, dset.shape[1]])
+    CPD_offset_recon = np.zeros([num_rows*num_cols, dset.shape[1]])
         
     CPD_recon[:,:] = -0.5*np.divide(dset[:,:,1],dset[:,:,2]) # vertex of parabola
     CPD_grad_recon[:,:] = dset[:,:,2]
+    CPD_offset_recon[:,:] = dset[:,:,0]
 
 #%% Visualize CPD vs time
 
@@ -1472,11 +1477,15 @@ CPD_on = CPD[:, p_on:p_off]
 CPD_off = CPD[:, p_off:]
 CPD_grad_on = CPD_grad[:, p_on:p_off]
 CPD_grad_off = CPD_grad[:, p_off:]
+CPD_offset_on = CPD_offset[:, p_on:p_off]
+CPD_offset_off = CPD_offset[:, p_off:]
 
 CPD_on_avg = np.zeros((num_rows, num_cols))
 CPD_off_avg = np.zeros((num_rows, num_cols))
-CPD_grad_resh_on_avg = np.zeros((num_rows, num_cols))
-CPD_grad_resh_off_avg = np.zeros((num_rows, num_cols))
+CPD_grad_on_avg = np.zeros((num_rows, num_cols))
+CPD_grad_off_avg = np.zeros((num_rows, num_cols))
+CPD_offset_on_avg = np.zeros((num_rows, num_cols))
+CPD_offset_off_avg = np.zeros((num_rows, num_cols))
 
 CPD_on_time = np.zeros((num_rows, num_cols))
 CPD_off_time = np.zeros((num_rows, num_cols))
@@ -1561,7 +1570,8 @@ for r in np.arange(CPD_on_avg.shape[0]):
     for c in np.arange(CPD_on_avg.shape[1]):
         
         CPD_on_avg[r][c] = np.mean(CPD_on[r*num_cols + c,:])
-        CPD_grad_resh_on_avg[r][c] = np.mean(CPD_grad_on[r*num_cols + c,:])
+        CPD_grad_on_avg[r][c] = np.mean(CPD_grad_on[r*num_cols + c,:])
+        CPD_offset_on_avg[r][c] = np.mean(CPD_offset_on[r*num_cols + c,:])
         cut = CPD_on[r*num_cols + c, :] - CPD_on[r*num_cols + c, 0]
         try:
             popt, _ = curve_fit(fitexp, time_on, cut, 
@@ -1580,7 +1590,8 @@ for r in np.arange(CPD_on_avg.shape[0]):
             print(r, ' ', c)
 
         CPD_off_avg[r][c] = np.mean(CPD_off[r*num_cols + c,:])
-        CPD_grad_resh_off_avg[r][c] = np.mean(CPD_grad_off[r*num_cols + c,:])
+        CPD_grad_off_avg[r][c] = np.mean(CPD_grad_off[r*num_cols + c,:])
+        CPD_offset_off_avg[r][c] = np.mean(CPD_offset_off[r*num_cols + c,:])
         cut = CPD_off[r*num_cols + c, :] - CPD_off[r*num_cols + c, 0]
         try:
             popt, _ = curve_fit(fitexp, time_off, cut, bounds=bds_off)
@@ -1601,43 +1612,38 @@ for r in np.arange(CPD_on_avg.shape[0]):
 
 SPV = CPD_on_avg - CPD_off_avg
 
-if PCA_post_reconstruction_clean == True:
-    np.savetxt(data_file+r'\CPD_on_PCApost.txt', CPD_on_avg, delimiter=' ')
-    np.savetxt(data_file+r'\CPD_off_PCApost.txt', CPD_off_avg, delimiter=' ')
-    np.savetxt(data_file+r'\CPD_on_time_PCApost.txt', CPD_on_time, delimiter=' ')
-    np.savetxt(data_file+r'\CPD_off_time_PCApost.txt', CPD_off_time, delimiter=' ')
-    np.savetxt(data_file+r'\SPV_PCApost.txt', SPV, delimiter=' ')
-else:
-    np.savetxt(data_file+r'\CPD_on_noPCApost.txt', CPD_on_avg, delimiter=' ')
-    np.savetxt(data_file+r'\CPD_off_noPCApost.txt', CPD_off_avg, delimiter=' ')
-    np.savetxt(data_file+r'\CPD_on_time_noPCApost.txt', CPD_on_time, delimiter=' ')
-    np.savetxt(data_file+r'\CPD_off_time_noPCApost.txt', CPD_off_time, delimiter=' ')
-    np.savetxt(data_file+r'\SPV_noPCApost.txt', SPV, delimiter=' ')
+prefix = 'no' if PCA_post_reconstruction_clean else ''
+np.savetxt(data_file+r'\CPD_on_'+prefix+'PCApost.txt', CPD_on_avg, delimiter=' ')
+np.savetxt(data_file+r'\CPD_off_'+prefix+'PCApost.txt', CPD_off_avg, delimiter=' ')
+np.savetxt(data_file+r'\CPD_on_time_'+prefix+'PCApost.txt', CPD_on_time, delimiter=' ')
+np.savetxt(data_file+r'\CPD_off_time_'+prefix+'PCApost.txt', CPD_off_time, delimiter=' ')
+np.savetxt(data_file+r'\CPDGrad_on_'+prefix+'PCApost.txt', CPD_grad_on_avg, delimiter=' ')
+np.savetxt(data_file+r'\CPDGrad_off_'+prefix+'PCApost.txt', CPD_grad_off_avg, delimiter=' ')
+np.savetxt(data_file+r'\CPDOffset_on_'+prefix+'PCApost.txt', CPD_offset_on_avg, delimiter=' ')
+np.savetxt(data_file+r'\CPDOffset_off_'+prefix+'PCApost.txt', CPD_offset_off_avg, delimiter=' ')
+np.savetxt(data_file+r'\SPV_'+prefix+'PCApost.txt', SPV, delimiter=' ')
 
 # Save CPD to the H5 file, currently doesn't check for overwrites
-grp_name = h5_main.name.split('/')[-1] + '-CPD'
-grp_CPD = px.io.VirtualGroup(grp_name, h5_main.parent.name + '/')
-
+grp_name = h5_CPD.name
+CPD_exists = px.hdf_utils.find_dataset(h5_file[grp_name].parent, 'CPD_on_time')
 #px.hdf_utils.write_main_dataset(grp_CPD,CPD)
 
-try: 
-    CPD_exists = h5_main.parent.name + '/' + grp_CPD.name + '/' + 'CPD_on_time'
-    CPD_on_exists = hdf.file[CPD_exists]   # does this file exist already?
-    CPD_on_exists = CPD_on_time
+if CPD_exists: 
+    CPD_exists = px.hdf_utils.find_dataset(h5_file[grp_name].parent, 'CPD_on_time')[0]
+    CPD_exists = CPD_on_time
     
-    CPD_exists = h5_main.parent.name + '/' + grp_CPD.name + '/' + 'CPD_off_time'
-    CPD_off_exists = hdf.file[CPD_exists]   
+    CPD_exists = px.hdf_utils.find_dataset(h5_file[grp_name].parent, 'CPD_off_time')[0]
     CPD_off_exists = CPD_off_time
     
-    SPV_exists = h5_main.parent.name + '/' + grp_CPD.name + '/' + 'SPV'
+    SPV_exists = px.hdf_utils.find_dataset(h5_file[grp_name].parent, 'SPV')[0]
     SPV_exists = SPV
     
     print('Overwriting CPD Data!')
-except:
+else:
     print('Creating new Datasets')
-    grp_CPD = px.io.VirtualGroup(h5_CPD.parent.name, h5_CPD.parent.name)
-    ds_CPDon = px.io.VirtualDataset('CPD_on_time', data=CPD_on_time, parent = h5_CPD.parent)
-    ds_CPDoff = px.io.VirtualDataset('CPD_off_time', data=CPD_off_time, parent = h5_CPD.parent)
+    grp_CPD = px.io.VirtualGroup(grp, h5_CPD.parent.name)
+    ds_CPDon = px.io.VirtualDataset('CPD_on_time', data=CPD_on_time, parent = grp_CPD.parent)
+    ds_CPDoff = px.io.VirtualDataset('CPD_off_time', data=CPD_off_time, parent = grp_CPD.parent)
     ds_SPV = px.io.VirtualDataset('SPV', data=SPV, parent= h5_CPD.parent)
     grp_CPD.add_children([ds_CPDon])
     grp_CPD.add_children([ds_CPDoff])
@@ -1747,19 +1753,53 @@ if save_figure == True:
     else:
         fig.savefig(data_file+'\CPDon_times_noPCA-Alone.tif', format='tiff')    
         
-#fig, a = plt.subplots(nrows=1, figsize=(13, 3))
-#_, cbar = px.plot_utils.plot_map(a, CPD_grad_resh_on_avg, cmap='inferno', aspect=aspect, 
-#                       x_vec=xv, y_vec = yv, stdevs = 2,
-#                       cbar_label='Gradient (a.u.)')
-#cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
-#a.set_title('Capacitive Gradient', fontsize=12)
+        
+######## GRADIENTS
+fig, a = plt.subplots(nrows=1, figsize=(13, 3))
+_, cbar = px.plot_utils.plot_map(a, CPD_grad_on_avg, cmap='inferno', aspect=aspect, 
+                       x_vec=xv, y_vec = yv, stdevs = 2,
+                       cbar_label='Gradient (a.u.) On Avg')
+cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
+a.set_title('Capacitive Gradient', fontsize=12)
 
 if save_figure == True:
     if PCA_post_reconstruction_clean == True:
-        fig.savefig(data_file+'\CPD_gradient_PCA-Alone_'+str(clean_components)+'.tif', format='tiff')
+        fig.savefig(data_file+'\CPD_gradientON_PCA-Alone_'+str(clean_components)+'.tif', format='tiff')
     else:
-        fig.savefig(data_file+'\CPD_gradient_noPCA-Alone.tif', format='tiff')    
+        fig.savefig(data_file+'\CPD_gradientON_noPCA-Alone.tif', format='tiff')    
+
+
+fig, a = plt.subplots(nrows=1, figsize=(13, 3))
+_, cbar = px.plot_utils.plot_map(a, CPD_grad_off_avg, cmap='inferno', aspect=aspect, 
+                       x_vec=xv, y_vec = yv, stdevs = 2,
+                       cbar_label='Gradient (a.u.) Off Avg')
+cbar.set_label('Time Constant (ms)', rotation=270, labelpad=16)
+a.set_title('Capacitive Gradient', fontsize=12)
+
+if save_figure == True:
+    if PCA_post_reconstruction_clean == True:
+        fig.savefig(data_file+'\CPD_gradientOFF_PCA-Alone_'+str(clean_components)+'.tif', format='tiff')
+    else:
+        fig.savefig(data_file+'\CPD_gradientOFF_noPCA-Alone.tif', format='tiff')
         
+CPD_grad_on_avg_flat = np.copy(CPD_grad_on_avg)
+for i in np.arange(CPD_grad_on_avg_flat.shape[0]):
+    
+    offset = np.mean(CPD_grad_on_avg_flat[i,:])
+    CPD_grad_on_avg_flat[i,:] -= offset
+    
+fig, a = plt.subplots(nrows=1, figsize=(13, 3))
+_, cbar = px.plot_utils.plot_map(a, CPD_grad_on_avg_flat, cmap='inferno', aspect=aspect, 
+                       x_vec=xv, y_vec = yv, stdevs = 2,vmin = -1e-8, vmax=1e-8,
+                       cbar_label='Gradient (a.u.) Off Avg')
+cbar.set_label('Gradient (flattened) F/m', rotation=270, labelpad=16)
+a.set_title('Capacitive Gradient Flattened', fontsize=12)
+
+if save_figure == True:
+    if PCA_post_reconstruction_clean == True:
+        fig.savefig(data_file+'\CPD_gradientON_FLAT_PCA-Alone_'+str(clean_components)+'.tif', format='tiff')
+    else:
+        fig.savefig(data_file+'\CPD_gradientON_FLAT_noPCA-Alone.tif', format='tiff')
 #%%
 # SPV plotting
 
@@ -1878,117 +1918,117 @@ from pixelCPD import averagemask
 
 #%% Data Visualization of separate CPDs
     
-from sklearn.utils.extmath import randomized_svd
-
-####### CPD_ON CASE
-U, S, V = randomized_svd(CPD_on, 256, n_iter=3)
-
-# Since the two spatial dimensions (x, y) have been collapsed to one, we need to reshape the abundance maps:
-abun_maps = np.reshape(U[:,:25], (num_rows, num_cols,-1))
-
-# Visualize the variance / statistical importance of each component:
-fig, axes = px.plot_utils.plot_scree(S, title='Skree plot')
-
-if save_figure == True:
-    fig.savefig(data_file+'\CPDon_Skree.eps', format='eps')
-    fig.savefig(data_file+'\CPDon_Skree.tif', format='tiff')
-
-
-# Visualize the eigenvectors:
-first_evecs = V[:9, :]
-
-fig, axes =px.plot_utils.plot_curves(time_on*1E+3, first_evecs, x_label='Time (ms)', 
-                                    y_label='CPD Eig (a.u.)', num_plots=3,
-                                    subtitle_prefix='Component', title='SVD Eigenvectors (F3R)',
-                                    evenly_spaced=False)
-
-if save_figure == True:
-    fig.savefig(data_file+'\CPDonEig.eps', format='eps')
-    fig.savefig(data_file+'\CPDon_Eig.tif', format='tiff')
-
-# Visualize the abundance maps:
-fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, title='SVD Abundance Maps',
-                                        color_bar_mode='single', cmap='inferno', reverse_dims=True)
-
-if save_figure == True:
-    fig.savefig(data_file+'\CPDon_Loadings.eps', format='eps')
-    fig.savefig(data_file+'\CPDon_Loadings.tif', format='tiff')
-
-####### CPD_OFF CASE
-U, S, V = randomized_svd(CPD_off, 256, n_iter=3)
-
-# Since the two spatial dimensions (x, y) have been collapsed to one, we need to reshape the abundance maps:
-abun_maps = np.reshape(U[:,:25], (num_rows, num_cols,-1))
-
-# Visualize the variance / statistical importance of each component:
-fig, axes = px.plot_utils.plot_scree(S, title='Skree plot')
-
-if save_figure == True:
-    fig.savefig(data_file+'\CPDoff_Skree.eps', format='eps')
-    fig.savefig(data_file+'\CPDoff_Skree.tif', format='tiff')
-
-
-# Visualize the eigenvectors:
-first_evecs = V[:9, :]
-
-fig, axes =px.plot_utils.plot_curves(time_off*1E+3, first_evecs, x_label='Time (ms)', 
-                                    y_label='CPD Eig (a.u.)', num_plots=3,
-                                    subtitle_prefix='Component', title='SVD Eigenvectors (F3R)',
-                                    evenly_spaced=False)
-if save_figure == True:
-    fig.savefig(data_file+'\CPDoff_Eig.eps', format='eps')
-    fig.savefig(data_file+'\CPDoff_Eig.tif', format='tiff')
-
-# Visualize the abundance maps:
-fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, title='SVD Abundance Maps',
-                             color_bar_mode='single', cmap='inferno', reverse_dims=True)
-
-if save_figure == True:
-    fig.savefig(data_file+'\CPDoff_Loadings.eps', format='eps')
-    fig.savefig(data_file+'\CPDoff_Loadings.tif', format='tiff')
-    
-#%% Data Visualization
-
-'''PCA of the total CPD data'''
-
-# do_svd = px.processing.svd_utils.SVD(h5_F3R, num_components=256)
-# h5_svd_group = do_svd.compute()
-from sklearn.utils.extmath import randomized_svd
-
-U, S, V = randomized_svd(CPD[:,:-1], 256, n_iter=3)
-#######U, S, V = randomized_svd(h5_filt[:].reshape([-1, pixel_ex_wfm.size]), 256, n_iter=3)
-######## h5_u = h5_svd_group['U']
-####### h5_v = h5_svd_group['V']
-####### h5_s = h5_svd_group['S']
-
-# Since the two spatial dimensions (x, y) have been collapsed to one, we need to reshape the abundance maps:
-abun_maps = np.reshape(U[:,:25], (num_rows, num_cols,-1))
-
-# Visualize the variance / statistical importance of each component:
-fig, axes = px.plot_utils.plot_scree(S, title='Skree plot')
-
-if save_figure == True:
-    fig.savefig(data_file+'\CPDtotal_Skree.eps', format='eps')
-    fig.savefig(data_file+'\CPDtotal_Skree.tif', format='tiff')
-
-
-# Visualize the eigenvectors:
-first_evecs = V[:6, :]
-
-fig, axes =px.plot_utils.plot_curves(time[:-1]*1E+3, first_evecs, x_label='Time (ms)', y_label='CPD Eig (a.u.)', num_plots=3,
-                                     subtitle_prefix='Component', title='SVD Eigenvectors (F3R)', evenly_spaced=False)
-
-if save_figure == True:
-    fig.savefig(data_file+'\CPDtotal_Eig.eps', format='eps')
-    fig.savefig(data_file+'\CPDtotal_Eig.tif', format='tiff')
-
-# Visualize the abundance maps:
-fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, title='SVD Abundance Maps',
-                             color_bar_mode='single', cmap='inferno', reverse_dims=True)
-
-if save_figure == True:
-    fig.savefig(data_file+'\CPDtotal_Loadings.eps', format='eps')
-    fig.savefig(data_file+'\CPDtotal_Loadings.tif', format='tiff')
+#from sklearn.utils.extmath import randomized_svd
+#
+######## CPD_ON CASE
+#U, S, V = randomized_svd(CPD_on, 256, n_iter=3)
+#
+## Since the two spatial dimensions (x, y) have been collapsed to one, we need to reshape the abundance maps:
+#abun_maps = np.reshape(U[:,:25], (num_rows, num_cols,-1))
+#
+## Visualize the variance / statistical importance of each component:
+#fig, axes = px.plot_utils.plot_scree(S, title='Skree plot')
+#
+#if save_figure == True:
+#    fig.savefig(data_file+'\CPDon_Skree.eps', format='eps')
+#    fig.savefig(data_file+'\CPDon_Skree.tif', format='tiff')
+#
+#
+## Visualize the eigenvectors:
+#first_evecs = V[:9, :]
+#
+#fig, axes =px.plot_utils.plot_curves(time_on*1E+3, first_evecs, x_label='Time (ms)', 
+#                                    y_label='CPD Eig (a.u.)', num_plots=3,
+#                                    subtitle_prefix='Component', title='SVD Eigenvectors (F3R)',
+#                                    evenly_spaced=False)
+#
+#if save_figure == True:
+#    fig.savefig(data_file+'\CPDonEig.eps', format='eps')
+#    fig.savefig(data_file+'\CPDon_Eig.tif', format='tiff')
+#
+## Visualize the abundance maps:
+#fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, title='SVD Abundance Maps',
+#                                        color_bar_mode='single', cmap='inferno', reverse_dims=True)
+#
+#if save_figure == True:
+#    fig.savefig(data_file+'\CPDon_Loadings.eps', format='eps')
+#    fig.savefig(data_file+'\CPDon_Loadings.tif', format='tiff')
+#
+######## CPD_OFF CASE
+#U, S, V = randomized_svd(CPD_off, 256, n_iter=3)
+#
+## Since the two spatial dimensions (x, y) have been collapsed to one, we need to reshape the abundance maps:
+#abun_maps = np.reshape(U[:,:25], (num_rows, num_cols,-1))
+#
+## Visualize the variance / statistical importance of each component:
+#fig, axes = px.plot_utils.plot_scree(S, title='Skree plot')
+#
+#if save_figure == True:
+#    fig.savefig(data_file+'\CPDoff_Skree.eps', format='eps')
+#    fig.savefig(data_file+'\CPDoff_Skree.tif', format='tiff')
+#
+#
+## Visualize the eigenvectors:
+#first_evecs = V[:9, :]
+#
+#fig, axes =px.plot_utils.plot_curves(time_off*1E+3, first_evecs, x_label='Time (ms)', 
+#                                    y_label='CPD Eig (a.u.)', num_plots=3,
+#                                    subtitle_prefix='Component', title='SVD Eigenvectors (F3R)',
+#                                    evenly_spaced=False)
+#if save_figure == True:
+#    fig.savefig(data_file+'\CPDoff_Eig.eps', format='eps')
+#    fig.savefig(data_file+'\CPDoff_Eig.tif', format='tiff')
+#
+## Visualize the abundance maps:
+#fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, title='SVD Abundance Maps',
+#                             color_bar_mode='single', cmap='inferno', reverse_dims=True)
+#
+#if save_figure == True:
+#    fig.savefig(data_file+'\CPDoff_Loadings.eps', format='eps')
+#    fig.savefig(data_file+'\CPDoff_Loadings.tif', format='tiff')
+#    
+##%% Data Visualization
+#
+#'''PCA of the total CPD data'''
+#
+## do_svd = px.processing.svd_utils.SVD(h5_F3R, num_components=256)
+## h5_svd_group = do_svd.compute()
+#from sklearn.utils.extmath import randomized_svd
+#
+#U, S, V = randomized_svd(CPD[:,:-1], 256, n_iter=3)
+########U, S, V = randomized_svd(h5_filt[:].reshape([-1, pixel_ex_wfm.size]), 256, n_iter=3)
+######### h5_u = h5_svd_group['U']
+######## h5_v = h5_svd_group['V']
+######## h5_s = h5_svd_group['S']
+#
+## Since the two spatial dimensions (x, y) have been collapsed to one, we need to reshape the abundance maps:
+#abun_maps = np.reshape(U[:,:25], (num_rows, num_cols,-1))
+#
+## Visualize the variance / statistical importance of each component:
+#fig, axes = px.plot_utils.plot_scree(S, title='Skree plot')
+#
+#if save_figure == True:
+#    fig.savefig(data_file+'\CPDtotal_Skree.eps', format='eps')
+#    fig.savefig(data_file+'\CPDtotal_Skree.tif', format='tiff')
+#
+#
+## Visualize the eigenvectors:
+#first_evecs = V[:6, :]
+#
+#fig, axes =px.plot_utils.plot_curves(time[:-1]*1E+3, first_evecs, x_label='Time (ms)', y_label='CPD Eig (a.u.)', num_plots=3,
+#                                     subtitle_prefix='Component', title='SVD Eigenvectors (F3R)', evenly_spaced=False)
+#
+#if save_figure == True:
+#    fig.savefig(data_file+'\CPDtotal_Eig.eps', format='eps')
+#    fig.savefig(data_file+'\CPDtotal_Eig.tif', format='tiff')
+#
+## Visualize the abundance maps:
+#fig, axes =px.plot_utils.plot_map_stack(abun_maps, num_comps=9, title='SVD Abundance Maps',
+#                             color_bar_mode='single', cmap='inferno', reverse_dims=True)
+#
+#if save_figure == True:
+#    fig.savefig(data_file+'\CPDtotal_Loadings.eps', format='eps')
+#    fig.savefig(data_file+'\CPDtotal_Loadings.tif', format='tiff')
 
 
 #%% CPD Time Slices
@@ -2016,6 +2056,31 @@ for k in timeslice:
     cbar.set_label('CPD (mV)', rotation=270, labelpad=16)
     #fig.savefig(data_file+'\CPDslice_' + tl + '_ms.eps', format='eps')
     fig.savefig(data_file+'\CPDslice_' + tl + '_ms.tif', format='tiff')
+
+#%% CPD Gradient
+timeslice = np.floor(np.arange(0.5, 8, .5) *1e-3/dtCPD)
+
+# find correct mn and mx for color scale
+CPD_mn = np.reshape(CPD_grad[:, p_on+int((p_off-p_on)/2)], [64, 128])
+mn = np.mean(CPD_mn) - 2.5*np.std(CPD_mn)
+CPD_mx = np.reshape(CPD_grad[:, p_off+int((CPD.shape[1]-p_off)/2)], [64, 128])
+mx = np.mean(CPD_mx) + 3*np.std(CPD_mx)
+
+#mn = -.13
+#mx = -.0600
+for k in timeslice:
+    fig = plt.figure(figsize=(13,3))
+    a = fig.add_subplot(111)
+    CPD_rs = np.reshape(CPD_grad[:, int(k)], [64, 128])
+    im = a.imshow(CPD_rs, cmap='inferno', aspect=aspect)
+    a.set_axis_off()
+    tl = '{0:.2f}'.format(k*dtCPD/1e-3)
+    plt.title('At '+ tl + ' ms', fontsize=12)
+    cx = fig.add_axes([0.9, 0.11, 0.02, 0.77])
+    cbar = fig.colorbar(im, cax=cx)
+    cbar.set_label('CPD (mV)', rotation=270, labelpad=16)
+    #fig.savefig(data_file+'\CPDslice_' + tl + '_ms.eps', format='eps')
+    fig.savefig(data_file+'\CPDslice_gradient_' + tl + '_ms.tif', format='tiff')
 
 #%%Animate and save
 
