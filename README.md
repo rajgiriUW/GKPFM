@@ -1,2 +1,4 @@
 # GKPFM
-Python edits to GKPFM+F3R
+Notebook and processing script for G-Mode KPFM + time-resolved EFM manuscript
+
+
