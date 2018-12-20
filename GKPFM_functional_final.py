@@ -78,6 +78,7 @@ from sklearn.decomposition import NMF
 
 # Finally, pycroscopy itself
 import pycroscopy as px
+import pyUSID as usid
 
 # Define Layouts for Widgets
 lbl_layout=dict(
@@ -447,7 +448,7 @@ hdf.close()
 from pathlib import Path
 
 # Set save file, can comment out and use the block above as you wish
-data_file = r'E:\ORNL\20191221_BAPI\BAPI22_2ms_700mA__0009'
+data_file = r'E:\ORNL\20191221_BAPI\BAPI22_2ms_green100mA__0007'
 save_figure = True
 data_file = os.path.expanduser(data_file)
 
@@ -1641,16 +1642,27 @@ if CPD_exists:
     print('Overwriting CPD Data!')
 else:
     print('Creating new Datasets')
-    grp_CPD = px.io.VirtualGroup(grp, h5_CPD.parent.name)
-    ds_CPDon = px.io.VirtualDataset('CPD_on_time', data=CPD_on_time, parent = grp_CPD.parent)
-    ds_CPDoff = px.io.VirtualDataset('CPD_off_time', data=CPD_off_time, parent = grp_CPD.parent)
-    ds_SPV = px.io.VirtualDataset('SPV', data=SPV, parent= h5_CPD.parent)
-    grp_CPD.add_children([ds_CPDon])
-    grp_CPD.add_children([ds_CPDoff])
-    grp_CPD.add_children([ds_SPV])
-    grp_CPD.attrs['pulse_time'] = [light_on_time[0], light_on_time[1]]
-    hdf.write(grp_CPD, print_log=True)
-    px.hdf_utils.write_ind_val_dsets
+    
+    # write the data directly to the CPD folder
+    # in the future will need to make this a unique subfolder for multiple attempts
+    dset = h5_file.create_dataset(h5_CPD.parent.name + '/CPD_on_time', CPD_on_time.shape)
+    dset[:,:] = CPD_on_time[:,:]
+    
+    dset = h5_file.create_dataset(h5_CPD.parent.name + '/SPV', SPV.shape)
+    dset[:,:] = SPV[:,:]
+    
+    dset = h5_file.create_dataset(h5_CPD.parent.name + '/CPD_off_time', CPD_off_time.shape)
+    dset[:,:] = CPD_off_time[:,:]
+    
+#    grp_CPD = px.io.VirtualGroup(grp_name, h5_CPD.parent.name)
+#    ds_CPDon = px.io.VirtualDataset('CPD_on_time', data=CPD_on_time, parent = grp_CPD.parent)
+#    ds_CPDoff = px.io.VirtualDataset('CPD_off_time', data=CPD_off_time, parent = grp_CPD.parent)
+#    ds_SPV = px.io.VirtualDataset('SPV', data=SPV, parent= h5_CPD.parent)
+#    grp_CPD.add_children([ds_CPDon])
+#    grp_CPD.add_children([ds_CPDoff])
+#    grp_CPD.add_children([ds_SPV])
+#    grp_CPD.attrs['pulse_time'] = [light_on_time[0], light_on_time[1]]
+#    hdf.write(grp_CPD, print_log=True)
 
 # Creates ancillary datasets
 #from ffta.utils import hdf_utils
