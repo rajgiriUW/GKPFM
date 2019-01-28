@@ -6,12 +6,12 @@ This notebook requires installation of Pycroscopy and pyUSID, available at https
 
 Author
 ------
-Dr. Raj Giridharagopal, Ph.D.
-Senior Research Scientist
-University of Washington
-Department of Chemistry
-Box 351700
-Seattle, Washington, USA 98195
-Office: +1-206-221-2095
-Lab: +1-206-221-4191
-E-mail: rgiri@uw.edu
+Dr. Raj Giridharagopal, Ph.D.  
+Senior Research Scientist  
+University of Washington  
+Department of Chemistry  
+Box 351700  
+Seattle, Washington, USA 98195  
+Office: +1-206-221-2095  
+Lab: +1-206-221-4191  
+E-mail: rgiri@uw.edu  
