@@ -190,24 +190,24 @@ Primarily just care about TF_norm, but loads all other stuff as well
 '''
 if loadTuneValues == True:
 
-    hdf = px.hdf_utils.h5py.File(h5_path)
+    hdf = usid.hdf_utils.h5py.File(h5_path)
     h5_file = hdf.file
     nm_base = '/Measurement_000'
     tune_base = '/Tune_Values'
-    grp = px.hdf_utils.find_dataset(h5_file['/'], 'TF_norm')[0]
+    grp = usid.hdf_utils.find_dataset(h5_file['/'], 'TF_norm')[0]
     grp = hdf.file[grp.parent.name]
     
     for key in cantl_parms:
         
-        cantl_parms[key] = list(px.hdf_utils.get_attributes(grp, key).values())[0]
+        cantl_parms[key] = list(usid.hdf_utils.get_attributes(grp, key).values())[0]
     
     for key in tune_items:
         
-        tune_items[key] = px.hdf_utils.find_dataset(grp, key)[0].value
+        tune_items[key] = usid.hdf_utils.find_dataset(grp, key)[0].value
     
     TF_norm = tune_items['TF_norm']
     
-    parms_dict = px.hdf_utils.get_attributes(hdf.file[nm_base])
+    parms_dict = usid.hdf_utils.get_attributes(hdf.file[nm_base])
 
     ex_freq = parms_dict['BE_center_frequency_[Hz]']
     samp_rate = parms_dict['IO_rate_[Hz]']
@@ -249,10 +249,10 @@ band_edge_mat = MB_parm_vec[:,1:3]
 
 hdf = px.io.HDFwriter(h5_path)
 h5_file = hdf.file
-h5_resp = px.hdf_utils.find_dataset(hdf.file, 'Raw_Data')[0]  # from tip
-h5_main = px.hdf_utils.find_dataset(hdf.file, 'Raw_Data')[-1] # chirp to tip
+h5_resp = usid.hdf_utils.find_dataset(hdf.file, 'Raw_Data')[0]  # from tip
+h5_main = usid.hdf_utils.find_dataset(hdf.file, 'Raw_Data')[-1] # chirp to tip
 
-parms_dict = px.hdf_utils.get_attributes(h5_main.parent.parent)
+parms_dict = usid.hdf_utils.get_attributes(h5_main.parent.parent)
 
 ex_freq = parms_dict['BE_center_frequency_[Hz]']
 samp_rate = parms_dict['IO_rate_[Hz]']
@@ -271,11 +271,17 @@ w_vec2 = np.linspace(-0.5*samp_rate,
 
 # Response
 A_pd = np.mean(h5_resp, axis=0)
+if 'float32' not in str(A_pd.dtype):
+    print('Upconverting')
+    A_pd = A_pd.astype('float32')
 yt0_tune = A_pd - np.mean(A_pd)
 Yt0_tune = np.fft.fftshift(np.fft.fft(yt0_tune,N_points_per_line)*dt)
 
 # BE_wave_train
 BE_pd = np.mean(h5_main, axis=0)
+if 'float32' not in str(BE_pd.dtype):
+    print('Upconverting')
+    BE_pd = BE_pd.astype('float32')
 f0 = BE_pd - np.mean(BE_pd)
 F0 = np.fft.fftshift(np.fft.fft(f0,N_points_per_line)*dt)
 
@@ -448,7 +454,7 @@ hdf.close()
 from pathlib import Path
 
 # Set save file, can comment out and use the block above as you wish
-data_file = r'E:\ORNL\20191221_BAPI\BAPI22_2ms_green100mA__0007'
+data_file = r'E:\ORNL\20191221_BAPI\BAPI20_4ms_700mA__0007'
 save_figure = True
 data_file = os.path.expanduser(data_file)
 
@@ -486,7 +492,7 @@ if input_file_path.endswith('.dat'):
 else:
     h5_path = input_file_path
     hdf = px.io.HDFwriter(h5_path)
-    px.hdf_utils.print_tree(hdf.file, rel_paths=True)
+    usid.hdf_utils.print_tree(hdf.file, rel_paths=True)
     preLoaded = True #for pre-loading some data
     
 # to automatically set light_on times
@@ -505,20 +511,20 @@ del(b)
 
 # Getting ancillary information and other parameters
 h5_file = hdf.file
-h5_main = px.hdf_utils.find_dataset(hdf.file,'Raw_Data')[0]
-h5_spec_vals = px.hdf_utils.get_auxiliary_datasets(h5_main, aux_dset_name='Spectroscopic_Values')[0]
-h5_spec_inds=px.hdf_utils.get_auxiliary_datasets(h5_main, aux_dset_name='Spectroscopic_Indices')[0]
+h5_main = usid.hdf_utils.find_dataset(hdf.file,'Raw_Data')[0]
+h5_spec_vals = usid.hdf_utils.get_auxiliary_datasets(h5_main, aux_dset_name='Spectroscopic_Values')[0]
+h5_spec_inds=usid.hdf_utils.get_auxiliary_datasets(h5_main, aux_dset_name='Spectroscopic_Indices')[0]
 
 # General parameters
-parms_dict = px.hdf_utils.get_attributes(h5_main.parent.parent)
+parms_dict = usid.hdf_utils.get_attributes(h5_main.parent.parent)
 samp_rate = parms_dict['IO_rate_[Hz]']
 ex_freq = parms_dict['BE_center_frequency_[Hz]']
 num_rows = parms_dict['grid_num_rows']
 num_cols = parms_dict['grid_num_cols']
 parms_dict['num_rows'] = num_rows
 parms_dict['num_cols'] = num_cols
-h5_pos_vals=px.hdf_utils.get_auxiliary_datasets(h5_main, aux_dset_name='Position_Values')[0]
-h5_pos_inds=px.hdf_utils.get_auxiliary_datasets(h5_main, aux_dset_name='Position_Indices')[0]
+h5_pos_vals=usid.hdf_utils.get_auxiliary_datasets(h5_main, aux_dset_name='Position_Values')[0]
+h5_pos_inds=usid.hdf_utils.get_auxiliary_datasets(h5_main, aux_dset_name='Position_Indices')[0]
 num_pts = h5_main.shape[1]
 pnts_per_pix=int(num_pts/num_cols)
 
@@ -592,8 +598,8 @@ if preLoaded == True:
     nm_CPD = nm_base + '/CPD'
     
     grp = hdf.file['/Measurement_000/Channel_000']
-    h5_filt = px.hdf_utils.find_dataset(grp, 'Filtered_Data')[0]
-    h5_resh = px.hdf_utils.find_dataset(hdf.file['/'.join([h5_filt.parent.name, nm_filt_resh])],
+    h5_filt = usid.hdf_utils.find_dataset(grp, 'Filtered_Data')[0]
+    h5_resh = usid.hdf_utils.find_dataset(hdf.file['/'.join([h5_filt.parent.name, nm_filt_resh])],
                                       'Reshaped_Data')[0]
     h5_resh_grp = h5_resh.parent
   
@@ -604,7 +610,7 @@ if preLoaded == True:
         nm_filt_resh_SVD = names[-1]
         
         # Filtered Data    
-        PCA_clean_data_prerecon = px.hdf_utils.find_dataset(hdf.file['/'.join([h5_resh_grp.name, nm_filt_resh_SVD])],'Rebuilt_Data')
+        PCA_clean_data_prerecon = usid.hdf_utils.find_dataset(hdf.file['/'.join([h5_resh_grp.name, nm_filt_resh_SVD])],'Rebuilt_Data')
         
         if PCA_clean_data_prerecon == []:
             PCA_pre_reconstruction_clean = False
@@ -621,14 +627,14 @@ if preLoaded == True:
         PCA_pre_reconstruction_clean = False
     
     # Post-F3R
-    h5_F3R = px.hdf_utils.find_dataset(grp, 'h5_F3R')[0]
+    h5_F3R = usid.hdf_utils.find_dataset(grp, 'h5_F3R')[0]
     h5_F3Rresh_grp = h5_F3R.parent
     
     # Get correct reshaped data
     names = h5_list(hdf.file[h5_F3R.parent.name],'h5_F3R-Reshape')
     nm_h5_resh = names[-1]
-    h5_F3Rresh = px.hdf_utils.find_dataset(hdf.file['/'.join([h5_F3R.parent.name, nm_h5_resh])],'Reshaped_Data')[0]
-    PCA_clean_data_postrecon = px.hdf_utils.find_dataset(hdf.file['/'.join([h5_F3Rresh.parent.name, nm_SVD])],
+    h5_F3Rresh = usid.hdf_utils.find_dataset(hdf.file['/'.join([h5_F3R.parent.name, nm_h5_resh])],'Reshaped_Data')[0]
+    PCA_clean_data_postrecon = usid.hdf_utils.find_dataset(hdf.file['/'.join([h5_F3Rresh.parent.name, nm_SVD])],
                                                   'Rebuilt_Data')
     if PCA_clean_data_postrecon == []:
         PCA_post_reconstruction_clean = False
@@ -645,11 +651,11 @@ if preLoaded == True:
     
     # CPD
     names = h5_list(h5_main.parent,'CPD')[-1]
-    CPD = px.hdf_utils.find_dataset(h5_file[h5_main.parent.name+'/'+names], 'CPD')[0]
+    CPD = usid.hdf_utils.find_dataset(h5_file[h5_main.parent.name+'/'+names], 'CPD')[0]
     CPD_grp = CPD.parent
     h5_CPD = CPD
-    CPD_on_time = px.hdf_utils.find_dataset(CPD_grp, 'CPD_on_time')[0]
-    CPD_off_time = px.hdf_utils.find_dataset(CPD_grp, 'CPD_off_time')[0]
+    CPD_on_time = usid.hdf_utils.find_dataset(CPD_grp, 'CPD_on_time')[0]
+    CPD_off_time = usid.hdf_utils.find_dataset(CPD_grp, 'CPD_off_time')[0]
     if type(CPD_on_time != np.ndarray):
         CPD_on_time = CPD_on_time.value
         CPD_off_time = CPD_off_time.value
@@ -682,7 +688,7 @@ if preLoaded == True:
     
     SPV = CPD_on_avg - CPD_off_avg
     # Parabola fit
-    wHfit3 = px.hdf_utils.find_dataset(hdf.file['/'],'parafit_main')[0]
+    wHfit3 = usid.hdf_utils.find_dataset(hdf.file['/'],'parafit_main')[0]
     reconstruct = False
 
     CPD_recon = np.zeros([num_rows*num_cols, wHfit3.shape[1]])
@@ -741,7 +747,7 @@ nbf = px.processing.fft.NoiseBandFilter(num_pts, samp_rate,
 #                                        [1E3, 1E3, 1.5E3])
 
 freq_filts = [lpf, nbf]
-noise_tolerance = 10e-6
+noise_tolerance = 1e-6
 
 narrowband = False
 if narrowband == True:
@@ -777,7 +783,7 @@ This segment does two things:
 # Try Force Conversion on Filtered data
 
 # Phase Offset
-ph = -.296 - np.pi   # phase from cable delays between excitation and response
+ph = -.34 - np.pi   # phase from cable delays between excitation and response
 search_phase = False # whether to brute force find the best phase
 
 # Calculates NoiseLimit
@@ -881,7 +887,7 @@ fig.savefig(data_file+r'\PostFilter_Displacements.tif', format='tiff')
 
 #%% Filter the full data set; this process is quite slow
 
-h5_filt_grp = px.hdf_utils.check_for_old(h5_main, 'FFT_Filtering')#, new_parms=filter_parms)
+h5_filt_grp = usid.hdf_utils.check_for_old(h5_main, 'FFT_Filtering')#, new_parms=filter_parms)
 overwrite = True
 
 if not h5_filt_grp:
@@ -903,7 +909,7 @@ else:
 # Reshapes the filtered response into a matrix per-pixel instead of in lines (as recorded by NI box)
 
 print('\n','#### Done! Now reshaping... ####')
-h5_main_filt = px.hdf_utils.find_dataset(hdf.file,'Filtered_Data')[0]
+h5_main_filt = usid.hdf_utils.find_dataset(hdf.file,'Filtered_Data')[0]
 
 scan_width=1
 h5_resh = px.processing.gmode_utils.reshape_from_lines_to_pixels(h5_filt, pixel_ex_wfm.size,
@@ -964,13 +970,13 @@ if save_figure == True:
     fig.savefig(data_file+r'\PCARaw_Loading.tif', format='tiff')
 
 #%% PCA_Clean prior to F3R Reconstruction?
-PCA_pre_reconstruction_clean = True
+PCA_pre_reconstruction_clean = False
 
 # Filters out the components specified from h5_resh (the reshaped h5 data)
 if PCA_pre_reconstruction_clean == True:
     
     # important! If choosing components, min is 3 or interprets as start/stop range of slice
-    clean_components = np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]) # np.append(range(5,9),(17,18))
+    clean_components = np.array([0,1,2,3,4]) # np.append(range(5,9),(17,18))
 
     # checks for existing SVD
     itms = [i for i in h5_resh.parent.items()]
@@ -982,8 +988,8 @@ if PCA_pre_reconstruction_clean == True:
     SVD_exists = False
     for i in svdnames:
         print(i.name.split('/')[-1])
-        if px.hdf_utils.find_dataset(hdf.file[i.name], 'Rebuilt_Data') != []:
-            rb = px.hdf_utils.find_dataset(hdf.file[i.name], 'Rebuilt_Data')[0]
+        if usid.hdf_utils.find_dataset(hdf.file[i.name], 'Rebuilt_Data') != []:
+            rb = usid.hdf_utils.find_dataset(hdf.file[i.name], 'Rebuilt_Data')[0]
             if np.array_equal(rb.parent.attrs['components_used'], clean_components):
                 print(i.name.split('/')[-1],'has same components')
                 SVD_exists = True
@@ -1082,20 +1088,20 @@ else:
 #%% Reshaping and Storing  Results
 
 # copies h5_filt over to H5_F3R; if necessary can come back here to reprocess
-h5_F3R = px.hdf_utils.create_empty_dataset(source_dset=h5_filt,
+h5_F3R = usid.hdf_utils.create_empty_dataset(source_dset=h5_filt,
                                            dtype=h5_filt.dtype,
                                            dset_name='h5_F3R',
                                            new_attrs=dict(),
                                            skip_refs=False)
-px.hdf_utils.copy_main_attributes(h5_filt, h5_F3R)
+usid.hdf_utils.copy_main_attributes(h5_filt, h5_F3R)
 h5_F3R[:,:] = G_time[:,:]
 h5_F3R.file.flush()
 
-px.hdf_utils.link_as_main(h5_main=h5_F3R, h5_pos_inds=h5_pos_inds,
+usid.hdf_utils.link_as_main(h5_main=h5_F3R, h5_pos_inds=h5_pos_inds,
                           h5_pos_vals=h5_pos_vals, h5_spec_inds=h5_spec_inds,
                           h5_spec_vals=h5_spec_vals, anc_dsets=[])
 
-h5_F3Rresh_grp = px.hdf_utils.find_results_groups(h5_F3R, 'Reshape')
+h5_F3Rresh_grp = usid.hdf_utils.find_results_groups(h5_F3R, 'Reshape')
 
 scan_width = 1
 h5_F3Rresh = px.processing.gmode_utils.reshape_from_lines_to_pixels(h5_F3R, pixel_ex_wfm.size, scan_width / num_cols)
@@ -1180,7 +1186,7 @@ if save_figure == True:
 PCA_post_reconstruction_clean = True
 
 if PCA_post_reconstruction_clean == True:
-    clean_components = np.array([0,1,2,3,4]) ##Components you want to keep
+    clean_components = np.array([0,21]) ##Components you want to keep
     #clean_components = np.array([0,1,2,4,6,12,13]) ##Components you want to keep
     #num_components = len(clean_components)
     
@@ -1407,9 +1413,9 @@ else:
 # Save to HDF
 print('Creating new dataset')
 
-grp_CPD = px.hdf_utils.create_indexed_group(h5_main.parent, 'CPD')
+grp_CPD = usid.hdf_utils.create_indexed_group(h5_main.parent, 'CPD')
 CPD_spec_dims = [px.write_utils.Dimension('Time', 's', tx)]
-h5_CPD = px.hdf_utils.write_main_dataset(grp_CPD,
+h5_CPD = usid.hdf_utils.write_main_dataset(grp_CPD,
                                          CPD,
                                          'CPD',
                                          'CPD',
@@ -1558,7 +1564,7 @@ plt.savefig(data_file+'\CPD_off_fitting_example-biexponential.tif', format='tiff
 #%% Generate CPD
 
 # Biexponential fitting makes this very slow! Warning!
-doBiexp_fit = False
+doBiexp_fit = True
 
 print('#### Generating CPD rate images ####')
 for r in np.arange(CPD_on_avg.shape[0]):
@@ -1626,17 +1632,17 @@ np.savetxt(data_file+r'\SPV_'+prefix+'PCApost.txt', SPV, delimiter=' ')
 
 # Save CPD to the H5 file, currently doesn't check for overwrites
 grp_name = h5_CPD.name
-CPD_exists = px.hdf_utils.find_dataset(h5_file[grp_name].parent, 'CPD_on_time')
-#px.hdf_utils.write_main_dataset(grp_CPD,CPD)
+CPD_exists = usid.hdf_utils.find_dataset(h5_file[grp_name].parent, 'CPD_on_time')
+#usid.hdf_utils.write_main_dataset(grp_CPD,CPD)
 
 if CPD_exists: 
-    CPD_exists = px.hdf_utils.find_dataset(h5_file[grp_name].parent, 'CPD_on_time')[0]
+    CPD_exists = usid.hdf_utils.find_dataset(h5_file[grp_name].parent, 'CPD_on_time')[0]
     CPD_exists = CPD_on_time
     
-    CPD_exists = px.hdf_utils.find_dataset(h5_file[grp_name].parent, 'CPD_off_time')[0]
+    CPD_exists = usid.hdf_utils.find_dataset(h5_file[grp_name].parent, 'CPD_off_time')[0]
     CPD_off_exists = CPD_off_time
     
-    SPV_exists = px.hdf_utils.find_dataset(h5_file[grp_name].parent, 'SPV')[0]
+    SPV_exists = usid.hdf_utils.find_dataset(h5_file[grp_name].parent, 'SPV')[0]
     SPV_exists = SPV
     
     print('Overwriting CPD Data!')
@@ -1851,8 +1857,8 @@ indices = {.1:1,
            30:3
            }
 
-img_length = parms_dict['FastScanSize']
-img_height = parms_dict['SlowScanSize']
+#img_length = parms_dict['FastScanSize']
+#img_height = parms_dict['SlowScanSize']
 
 # Random indices to check the CPD
 useRandomPixels = True
@@ -2324,9 +2330,9 @@ mask_path = 'E:/ORNL/20191221_BAPI/nice_masks/Mask_BAPI22_0006.txt'
 
 mask = mask_utils.load_mask_txt(mask_path, flip=False)
 
-CPD_file = px.hdf_utils.find_dataset(h5_file, 'CPD')[-1]
+CPD_file = usid.hdf_utils.find_dataset(h5_file, 'CPD')[-1]
 if CPD_file.name.split('/')[-1] != 'CPD':
-    CPD_file = px.hdf_utils.find_dataset(CPD_file.parent, 'CPD')[0]
+    CPD_file = usid.hdf_utils.find_dataset(CPD_file.parent, 'CPD')[0]
 
 for k in parms_dict:
     CPD_file.parent.attrs[k] = parms_dict[k]
